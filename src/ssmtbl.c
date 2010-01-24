@@ -3,6 +3,7 @@
 
 /* private function prototypes */
 static void ssmtblclear(SSMTBL *tbl);
+static void ssmtblsetecode(SSMTBL *tbl, int ecode);
 
 /*-----------------------------------------------------------------------------
  * APIs
@@ -31,7 +32,10 @@ void ssmtbldel(SSMTBL *tbl) {
 uint64_t ssmtblmsiz(SSMTBL *tbl) {
   uint64_t ret = 0;
   assert(tbl);
-  pthread_rwlock_rdlock(&tbl->mtx);
+  if (pthread_rwlock_rdlock(&tbl->mtx)) {
+    ssmtblsetecode(tbl, SSETHREAD);
+    return 0;
+  }
   ret = tbl->msiz;
   pthread_rwlock_unlock(&tbl->mtx);
   return ret;
@@ -40,7 +44,10 @@ uint64_t ssmtblmsiz(SSMTBL *tbl) {
 uint64_t ssmtblrnum(SSMTBL *tbl) {
   uint64_t ret = 0;
   assert(tbl);
-  pthread_rwlock_rdlock(&tbl->mtx);
+  if (pthread_rwlock_rdlock(&tbl->mtx)) {
+    ssmtblsetecode(tbl, SSETHREAD);
+    return 0;
+  }
   ret = tbl->rnum;
   pthread_rwlock_unlock(&tbl->mtx);
   return ret;
@@ -48,7 +55,10 @@ uint64_t ssmtblrnum(SSMTBL *tbl) {
 
 int ssmtblput(SSMTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz) {
   assert(tbl && tbl->mdb && kbuf && ksiz >= 0 && vbuf && vsiz >= 0);
-  pthread_rwlock_wrlock(&tbl->mtx);
+  if (pthread_rwlock_wrlock(&tbl->mtx)) {
+    ssmtblsetecode(tbl, SSETHREAD);
+    return -1;
+  }
   tcmdbput(tbl->mdb, kbuf, ksiz, vbuf, vsiz);
   tbl->msiz = tcmdbmsiz(tbl->mdb);
   tbl->rnum = tcmdbrnum(tbl->mdb);
@@ -59,7 +69,10 @@ int ssmtblput(SSMTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsi
 void *ssmtblget(SSMTBL *tbl, const void *kbuf, int ksiz, int *sp) {
   void *p = NULL;
   assert(tbl && tbl->mdb && kbuf && ksiz >= 0 && sp);
-  pthread_rwlock_rdlock(&tbl->mtx);
+  if (pthread_rwlock_rdlock(&tbl->mtx)) {
+    ssmtblsetecode(tbl, SSETHREAD);
+    return NULL;
+  }
   p = tcmdbget(tbl->mdb, kbuf, ksiz, sp);
   pthread_rwlock_unlock(&tbl->mtx);
   return p;
@@ -74,4 +87,9 @@ static void ssmtblclear(SSMTBL *tbl) {
   tbl->msiz = 0;
   tbl->rnum = 0;
   tbl->ecode = SSESUCCESS;
+}
+
+static void ssmtblsetecode(SSMTBL *tbl, int ecode) {
+  assert(tbl);
+  tbl->ecode = ecode;
 }
