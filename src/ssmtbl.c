@@ -73,4 +73,5 @@ static void ssmtblclear(SSMTBL *tbl) {
   tbl->mdb = NULL;
   tbl->msiz = 0;
   tbl->rnum = 0;
+  tbl->ecode = SSESUCCESS;
 }

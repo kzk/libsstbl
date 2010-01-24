@@ -1,9 +1,6 @@
 #ifndef _SSMTBL_H
 #define _SSMTBL_H
 
-#include <pthread.h>
-#include <tcutil.h>
-
 #if defined(__cplusplus)
 #define __SSMTBL_CLINKAGEBEGIN extern "C" {
 #define __SSMTBL_CLINKAGEEND }
@@ -13,13 +10,16 @@
 #endif
 __SSMTBL_CLINKAGEBEGIN
 
+#include <pthread.h>
+#include <tcutil.h>
+
 typedef struct {
   TCMDB *mdb;           /* memory database */
   uint64_t msiz;        /* total size of memory database */
   uint64_t rnum;        /* total number of records */
   pthread_rwlock_t mtx; /* mutex for record */
+  int ecode;            /* error code */
 } SSMTBL;
-
 
 /* Create an on-memory SSTable object.
    The return value is the new on-memory SSTable object.
