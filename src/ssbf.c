@@ -58,6 +58,10 @@ int ssbfopen(SSBF *bf, const char *path, int omode) {
     ssbfsetecode(bf, SSEMMAP);
     goto err;
   }
+  if (madvise(ptr, bf->bsiz, MADV_RANDOM) < 0) {
+    ssbfsetecode(bf, SSEMMAP);
+    goto err;
+  }
   bf->fd = fd;
   bf->b = ptr;
   bf->omode = omode;
