@@ -1,6 +1,12 @@
 #include <ssutil.h>
 #include <ssmtbl.h>
 
+/* private function prototypes */
+static void ssmtblclear(SSMTBL *tbl);
+
+/*-----------------------------------------------------------------------------
+ * APIs
+ */
 SSMTBL *ssmtblnew(void) {
   SSMTBL *tbl;
   SSMALLOC(tbl, sizeof(SSMTBL));
@@ -12,13 +18,6 @@ SSMTBL *ssmtblnew(void) {
 err:
   if (tbl) ssmtbldel(tbl);
   return NULL;
-}
-
-void ssmtblclear(SSMTBL *tbl) {
-  assert(tbl);
-  tbl->mdb = NULL;
-  tbl->msiz = 0;
-  tbl->rnum = 0;
 }
 
 void ssmtbldel(SSMTBL *tbl) {
@@ -57,10 +56,21 @@ int ssmtblput(SSMTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsi
   return 0;
 }
 
-int ssmtblget(SSMTBL *tbl, const void *kbuf, int ksiz, int *sp) {
+void *ssmtblget(SSMTBL *tbl, const void *kbuf, int ksiz, int *sp) {
+  void *p = NULL;
   assert(tbl && tbl->mdb && kbuf && ksiz >= 0 && sp);
   pthread_rwlock_rdlock(&tbl->mtx);
-  tcmdbget(tbl->mdb, kbuf, ksiz, sp);
+  p = tcmdbget(tbl->mdb, kbuf, ksiz, sp);
   pthread_rwlock_unlock(&tbl->mtx);
-  return 0;
+  return p;
+}
+
+/*-----------------------------------------------------------------------------
+ * private functions
+ */
+static void ssmtblclear(SSMTBL *tbl) {
+  assert(tbl);
+  tbl->mdb = NULL;
+  tbl->msiz = 0;
+  tbl->rnum = 0;
 }
