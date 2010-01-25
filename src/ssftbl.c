@@ -164,11 +164,11 @@ static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void 
   uint64_t doff = lseek(tbl->dfd, 0, SEEK_END);
   if (sswrite(tbl->dfd, &ksiz, sizeof(ksiz)) != 0) goto err;
   if (sswrite(tbl->dfd, kbuf, ksiz) != 0) goto err;
-  if (sswrite(tbl->ifd, &vsiz, sizeof(vsiz)) != 0) goto err;
-  if (sswrite(tbl->ifd, vbuf, vsiz) != 0) goto err;
+  if (sswrite(tbl->dfd, &vsiz, sizeof(vsiz)) != 0) goto err;
+  if (sswrite(tbl->dfd, vbuf, vsiz) != 0) goto err;
   tbl->curblksiz += vsiz;
   assert(tbl->blksiz > 0);
-  if (tbl->curblksiz >= tbl->blksiz) {
+  if (tbl->lastappendedkey == NULL || tbl->curblksiz >= tbl->blksiz) {
     /* record into index file */
     if (sswrite(tbl->ifd, &ksiz, sizeof(ksiz)) != 0) goto err;
     if (sswrite(tbl->ifd, kbuf, ksiz) != 0) goto err;
@@ -176,7 +176,7 @@ static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void 
     /* move to the next block */
     tbl->curblksiz = 0;
   }
-  tbl->lastappendedkey = realloc(tbl->lastappendedkey, tbl->lastappendedkeysiz);
+  SSREALLOC(tbl->lastappendedkey, tbl->lastappendedkey, tbl->lastappendedkeysiz);
   memcpy(tbl->lastappendedkey, kbuf, ksiz);
   tbl->lastappendedkeysiz = ksiz;
   return 0;

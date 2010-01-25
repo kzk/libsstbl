@@ -48,6 +48,11 @@ enum {                                   /* enumeration for error codes */
     (SS_res) = malloc(SS_size);   \
   } while (0)
 
+#define SSREALLOC(SS_res, SS_ptr, SS_size)       \
+  do {                                           \
+    (SS_res) = realloc(SS_ptr, SS_size);         \
+  } while (0)  
+
 #define SSFREE(SS_ptr)                          \
   do {                                          \
     free(SS_ptr);                               \
