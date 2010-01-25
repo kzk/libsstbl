@@ -12,7 +12,7 @@ protected:
     ftbl = ssftblnew();
     ASSERT_TRUE(ftbl != NULL);
   }
-  void TearDow() {
+  void TearDown() {
     ssftbldel(ftbl);
   }
   SSFTBL *ftbl;
@@ -26,17 +26,26 @@ TEST_F(SSFTBLTestFixture, new_del) {
 class SSFTBLWriterTestFixture : public SSFTBLTestFixture {
 protected:
   void SetUp() {
+    dbname = "./ssftblwritertest";
+    unlink((dbname + ".sstbld").c_str());
+    unlink((dbname + ".sstbli").c_str());
+
     SSFTBLTestFixture::SetUp();
     int r;
-    r = ssftblopen(ftbl, "./ssftblwritertest", SSFTBLOWRITER);
+    r = ssftblopen(ftbl, dbname.c_str(), SSFTBLOWRITER);
     ASSERT_EQ(0, r);
   }
-  void TearDow() {
-    SSFTBLTestFixture::TearDown();
+  void TearDown() {
     int r;
     r = ssftblclose(ftbl);
     ASSERT_EQ(0, r);
+
+    ASSERT_EQ(0, unlink((dbname + ".sstbld").c_str()));
+    ASSERT_EQ(0, unlink((dbname + ".sstbli").c_str()));
+
+    SSFTBLTestFixture::TearDown();
   }
+  string dbname;
 };
 
 TEST_F(SSFTBLWriterTestFixture, open_close) {
