@@ -53,8 +53,8 @@ int ssbfopen(SSBF *bf, const char *path, int omode) {
   int prot = 0;
   if (omode & SSBFOWRITER) prot |= PROT_WRITE;
   if (omode & SSBFOREADER) prot |= PROT_READ;
-  SSSYS_NOINTR(ptr, mmap(NULL, bf->bsiz, prot, MAP_SHARED, fd, 0));
-  if (ptr == NULL) {
+  ptr = mmap(NULL, bf->bsiz, prot, MAP_SHARED, fd, 0);
+  if (ptr == MAP_FAILED) {
     ssbfsetecode(bf, SSEMMAP);
     goto err;
   }
