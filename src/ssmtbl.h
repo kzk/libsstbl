@@ -10,11 +10,11 @@
 #endif
 __SSMTBL_CLINKAGEBEGIN
 
+#include <stdint.h>
 #include <pthread.h>
-#include <tcutil.h>
 
 typedef struct {
-  TCMDB *mdb;           /* memory database */
+  void *mdb;            /* memory database */
   uint64_t msiz;        /* total size of memory database */
   uint64_t rnum;        /* total number of records */
   pthread_rwlock_t mtx; /* mutex for record */

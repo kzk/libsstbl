@@ -1,6 +1,8 @@
 #include <ssutil.h>
 #include <ssmtbl.h>
 
+#include <tcutil.h>
+
 /* private function prototypes */
 static void ssmtblclear(SSMTBL *tbl);
 static void ssmtblsetecode(SSMTBL *tbl, int ecode);
