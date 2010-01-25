@@ -14,6 +14,7 @@ __SSFTBL_CLINKAGEBEGIN
 #include <tcutil.h>
 
 typedef struct {
+  char *path;                  /* path of table file */
   int dfd;                     /* file descriptor for data file */
   int ifd;                     /* file descriptor for index file */
   uint64_t blksiz;             /* block size */

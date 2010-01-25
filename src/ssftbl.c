@@ -35,8 +35,8 @@ SSFTBL *ssftblnew(void) {
 
 void ssftbldel(SSFTBL *tbl) {
   assert(tbl);
-  if (tbl->lastappendedkey)
-    SSFREE(tbl->lastappendedkey);
+  if (tbl->dfd >= 0)
+    ssftblclose(tbl);
   SSFREE(tbl);
 }
 
@@ -51,16 +51,21 @@ int ssftblopen(SSFTBL *tbl, const char *path, enum SSFTBLOMODE omode) {
     ssftblsetecode(tbl, SSEINVALID);
     return -1;
   }
+  int r;
   switch (omode) {
   case SSFTBLOWRITER:
-    return ssftblwriteopenimpl(tbl, path);
+    r = ssftblwriteopenimpl(tbl, path);
+    break;
   case SSFTBLOREADER:
-    return ssftblreadopenimpl(tbl, path);
+    r = ssftblreadopenimpl(tbl, path);
+    break;
   default:
-    ;
+    r = -1;
+    ssftblsetecode(tbl, SSEINVALID);
+    break;
   }
-  ssftblsetecode(tbl, SSEINVALID);
-  return -1;
+  if (r == 0) tbl->path = strdup(path);
+  return r;
 }
 
 int ssftblappend(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz) {
@@ -84,6 +89,10 @@ int ssftblclose(SSFTBL *tbl) {
   if (tbl->dfd < 0) {
     ssftblsetecode(tbl, SSEINVALID);
     return -1;
+  }
+  if (tbl->path) {
+    SSFREE(tbl->path);
+    tbl->path = NULL;
   }
   if (tbl->dfd >= 0) {
     SSSYS_NOINTR(r, fsync(tbl->dfd));
@@ -109,6 +118,7 @@ int ssftblclose(SSFTBL *tbl) {
  */
 static void ssftblclear(SSFTBL *tbl) {
   assert(tbl);
+  tbl->path = NULL;
   tbl->dfd = -1;
   tbl->ifd = -1;
   tbl->blksiz = SSFTBLBLOCKSIZ;
