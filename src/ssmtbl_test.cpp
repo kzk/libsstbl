@@ -14,7 +14,7 @@ protected:
     EXPECT_EQ(0, ssmtblrnum(mtbl));
     EXPECT_EQ(0, ssmtblmsiz(mtbl));
   }
-  void TearDow() {
+  void TearDown() {
     ssmtbldel(mtbl);
   }
   SSMTBL *mtbl;
