@@ -14,17 +14,26 @@ __SSFTBL_CLINKAGEBEGIN
 #include <tcutil.h>
 
 typedef struct {
+  char *kbuf;    /* key data */
+  int ksiz;      /* key size */
+  uint64_t doff; /* offset in data file */
+} SSFTBLIDXENT;
+
+typedef struct {
   char *path;                  /* path of table file */
   int dfd;                     /* file descriptor for data file */
   int ifd;                     /* file descriptor for index file */
   uint64_t blksiz;             /* block size */
   uint64_t rnum;               /* total number of records */
   pthread_rwlock_t mtx;        /* mutex for record */
-  uint64_t curblksiz;          /* counter for splitting into blocks in append */
-  char *lastappendedkey;       /* last appended key */
-  uint32_t lastappendedkeysiz; /* size of last appended key */
   int omode;                   /* open mode */
   int ecode;                   /* error code */
+  /* writer-only */
+  uint64_t curblksiz;          /* counter for splitting into blocks in append */
+  SSFTBLIDXENT lastappended;   /* last appended key info */
+  /* reader-only */
+  SSFTBLIDXENT *idx;           /* index used for binary-search */
+  uint32_t idxsiz;             /* size of index */
 } SSFTBL;
 
 enum SSFTBLOMODE { /* enumeration for open modes */
@@ -38,7 +47,6 @@ int ssftbltune(SSFTBL *tbl, uint64_t blksiz);
 
 int ssftblopen(SSFTBL *tbl, const char *path, enum SSFTBLOMODE omode);
 int ssftblclose(SSFTBL *tbl);
-int ssftblunlink(SSFTBL *tbl);
 
 int ssftblappend(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz);
 void *ssftblget(SSFTBL *tbl, const void *kbuf, int ksiz, int *sp);

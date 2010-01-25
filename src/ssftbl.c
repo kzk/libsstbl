@@ -10,12 +10,11 @@
 
 /* private function prototypes */
 static void ssftblclear(SSFTBL *tbl);
-static int ssftblwriteopenimpl(SSFTBL *tbl, const char *path);
-static int ssftblreadopenimpl(SSFTBL *tbl, const char *path);
+static int ssftblopenimpl(SSFTBL *tbl, const char *path, int oflag);
 static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz);
-static int ssftbldumpmeta(SSFTBL *tbl);
+static int ssftblloadindex(SSFTBL *tbl);
+static SSFTBLIDXENT *ssftblindexlowerbound(SSFTBL *tbl, const void *kbuf, int ksiz);
 static int ssftblkeycmp(const char *s1, size_t n1, const char *s2, size_t n2);
-
 static void ssftblsetecode(SSFTBL *tbl, int ecode);
 
 /* private macros */
@@ -54,10 +53,13 @@ int ssftblopen(SSFTBL *tbl, const char *path, enum SSFTBLOMODE omode) {
   int r;
   switch (omode) {
   case SSFTBLOWRITER:
-    r = ssftblwriteopenimpl(tbl, path);
+    r = ssftblopenimpl(tbl, path, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND);
+    if (r == 0) tbl->omode = SSFTBLOWRITER;
     break;
   case SSFTBLOREADER:
-    r = ssftblreadopenimpl(tbl, path);
+    r = ssftblopenimpl(tbl, path, O_RDONLY);
+    if (r == 0) r = ssftblloadindex(tbl);
+    if (r == 0) tbl->omode = SSFTBLOREADER;
     break;
   default:
     r = -1;
@@ -68,24 +70,8 @@ int ssftblopen(SSFTBL *tbl, const char *path, enum SSFTBLOMODE omode) {
   return r;
 }
 
-int ssftblappend(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz) {
-  assert(tbl && kbuf && ksiz > 0 && vbuf && vsiz > 0);
-  if (tbl->omode != SSFTBLOWRITER) {
-    ssftblsetecode(tbl, SSEINVALID);
-    return -1;
-  }
-  if (tbl->lastappendedkey != NULL) {
-    if (FTKEYCMPGREATER(tbl->lastappendedkey, tbl->lastappendedkeysiz, kbuf, ksiz)) {
-      /* keys must be appended in the lexicographically ascending order */
-      ssftblsetecode(tbl, SSEINVALID);
-      return -1;
-    }
-  }
-  return ssftblappendimpl(tbl, kbuf, ksiz, vbuf, vsiz);
-}
-
 int ssftblclose(SSFTBL *tbl) {
-  int r;
+  int r = 0;
   if (tbl->dfd < 0) {
     ssftblsetecode(tbl, SSEINVALID);
     return -1;
@@ -100,17 +86,58 @@ int ssftblclose(SSFTBL *tbl) {
     tbl->dfd = -1;
   }
   if (tbl->ifd >= 0) {
+    if (tbl->omode == SSFTBLOWRITER && tbl->lastappended.kbuf) {
+      /* record last entry into index file */
+      SSFTBLIDXENT *e = &tbl->lastappended;
+      if (sswrite(tbl->ifd, &e->ksiz, sizeof(e->ksiz)) != 0) r = -1;
+      if (sswrite(tbl->ifd, e->kbuf,  e->ksiz)         != 0) r = -1;
+      if (sswrite(tbl->ifd, &e->doff, sizeof(e->doff)) != 0) r = -1;
+    }
     SSSYS_NOINTR(r, fsync(tbl->dfd));
     SSSYS_NOINTR(r, close(tbl->ifd));
     tbl->ifd = -1;
   }
   tbl->curblksiz = 0;
-  if (tbl->lastappendedkey) {
-    SSFREE(tbl->lastappendedkey);
-    tbl->lastappendedkey = NULL;
-    tbl->lastappendedkeysiz = 0;
+  if (tbl->lastappended.kbuf) {
+    SSFREE(tbl->lastappended.kbuf);
+    tbl->lastappended.kbuf = NULL;
+    tbl->lastappended.ksiz = 0;
+    tbl->lastappended.doff = 0;
+  }
+  if (tbl->idx) {
+    SSFREE(tbl->idx);
+    tbl->idx = NULL;
+    tbl->idxsiz = 0;
   }
   return 0;
+}
+
+int ssftblappend(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz) {
+  assert(tbl && kbuf && ksiz > 0 && vbuf && vsiz > 0);
+  if (tbl->omode != SSFTBLOWRITER) {
+    ssftblsetecode(tbl, SSEINVALID);
+    return -1;
+  }
+  if (tbl->lastappended.kbuf != NULL) {
+    if (FTKEYCMPGREATER(tbl->lastappended.kbuf, tbl->lastappended.ksiz, kbuf, ksiz)) {
+      /* keys must be appended in the lexicographically ascending order */
+      ssftblsetecode(tbl, SSEINVALID);
+      return -1;
+    }
+  }
+  return ssftblappendimpl(tbl, kbuf, ksiz, vbuf, vsiz);
+}
+
+void *ssftblget(SSFTBL *tbl, const void *kbuf, int ksiz, int *sp) {
+  if (tbl->idxsiz == 0) return NULL;
+  SSFTBLIDXENT *lbound = ssftblindexlowerbound(tbl, kbuf, ksiz);
+  SSFTBLIDXENT *first = tbl->idx;
+  SSFTBLIDXENT *last = tbl->idx + tbl->idxsiz;
+  if (lbound == first && FTKEYCMPLESS(kbuf, ksiz, first->kbuf, first->ksiz))
+    return NULL;
+  if (lbound == last)
+    return NULL;
+  return strdup("aiueo");
 }
 
 /*-----------------------------------------------------------------------------
@@ -123,17 +150,19 @@ static void ssftblclear(SSFTBL *tbl) {
   tbl->ifd = -1;
   tbl->blksiz = SSFTBLBLOCKSIZ;
   tbl->rnum = 0;
-  tbl->curblksiz = 0;
-  tbl->lastappendedkey = NULL;
-  tbl->lastappendedkeysiz = 0;
   tbl->omode = 0;
   tbl->ecode = SSESUCCESS;
+  tbl->curblksiz = 0;
+  tbl->lastappended.kbuf = NULL;
+  tbl->lastappended.ksiz = 0;
+  tbl->lastappended.doff = 0;
+  tbl->idx = NULL;
+  tbl->idxsiz = 0;
 }
 
-static int ssftblwriteopenimpl(SSFTBL *tbl, const char *path) {
+static int ssftblopenimpl(SSFTBL *tbl, const char *path, int oflag) {
   int r, i;
   int fds[2]; /* fd[0] -> dfd, fd[1] -> ifd */
-  int oflag = O_WRONLY | O_CREAT | O_TRUNC | O_APPEND;
   char *paths[2];
   SSMALLOC(paths[0], strlen(path) + strlen(".sstbld") + 1);
   SSMALLOC(paths[1], strlen(path) + strlen(".sstbli") + 1);
@@ -157,17 +186,12 @@ static int ssftblwriteopenimpl(SSFTBL *tbl, const char *path) {
   }
   tbl->dfd = fds[0];
   tbl->ifd = fds[1];
-  tbl->omode = SSFTBLOWRITER;
   return 0;
 err:
   for (i = 0; i < 2; i++)
     if (fds[i] >= 0)
       SSSYS_NOINTR(r, close(fds[i]));
   return -1;
-}
-
-static int ssftblreadopenimpl(SSFTBL *tbl, const char *path) {
-  return 0;
 }
 
 static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz) {
@@ -178,7 +202,7 @@ static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void 
   if (sswrite(tbl->dfd, vbuf, vsiz) != 0) goto err;
   tbl->curblksiz += vsiz;
   assert(tbl->blksiz > 0);
-  if (tbl->lastappendedkey == NULL || tbl->curblksiz >= tbl->blksiz) {
+  if (tbl->lastappended.kbuf == NULL || tbl->curblksiz >= tbl->blksiz) {
     /* record into index file */
     if (sswrite(tbl->ifd, &ksiz, sizeof(ksiz)) != 0) goto err;
     if (sswrite(tbl->ifd, kbuf, ksiz) != 0) goto err;
@@ -186,18 +210,61 @@ static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void 
     /* move to the next block */
     tbl->curblksiz = 0;
   }
-  SSREALLOC(tbl->lastappendedkey, tbl->lastappendedkey, tbl->lastappendedkeysiz);
-  memcpy(tbl->lastappendedkey, kbuf, ksiz);
-  tbl->lastappendedkeysiz = ksiz;
+  SSREALLOC(tbl->lastappended.kbuf, tbl->lastappended.kbuf, tbl->lastappended.ksiz);
+  memcpy(tbl->lastappended.kbuf, kbuf, ksiz);
+  tbl->lastappended.ksiz = ksiz;
+  tbl->lastappended.doff = doff;
   return 0;
 err:
   ssftblsetecode(tbl, SSEWRITE);
   return -1;
 }
 
-static int ssftbldumpmeta(SSFTBL *tbl) {
+static int ssftblloadindex(SSFTBL *tbl) {
   assert(tbl);
+  if (tbl->ifd < 0) {
+    ssftblsetecode(tbl, SSEINVALID);
+    return -1;
+  }
+  uint32_t n = 0;
+  while (1) {
+    // TODO: proper file termination condition
+    // TODO: remove realloc
+    int ksiz; char *kbuf; uint64_t doff;
+    if (ssread(tbl->ifd, &ksiz, sizeof(int)) < 0) break;
+    SSMALLOC(kbuf, ksiz);
+    if (ssread(tbl->ifd, kbuf, ksiz) < 0) break;
+    if (ssread(tbl->ifd, &doff, sizeof(uint64_t)) < 0) break;
+    n++;
+    SSREALLOC(tbl->idx, tbl->idx, sizeof(tbl->idx[0]) * n);
+    tbl->idx[n-1].kbuf = kbuf;
+    tbl->idx[n-1].ksiz = ksiz;
+    tbl->idx[n-1].doff = doff;
+  }
+  tbl->idxsiz = n;
   return 0;
+}
+
+static SSFTBLIDXENT *ssftblindexlowerbound(SSFTBL *tbl, const void *kbuf, int ksiz)
+{
+  assert(tbl && kbuf && ksiz);
+  uint32_t len = tbl->idxsiz;
+  uint32_t half;
+  SSFTBLIDXENT *first, *last, *middle;
+  first = tbl->idx;
+  last = tbl->idx + len;
+  while (len > 0) {
+    half = len >> 1;
+    middle = first + half;
+    if (FTKEYCMPLESS(middle->kbuf, middle->ksiz, kbuf, ksiz)) {
+      first = middle;
+      first++;
+      len = len - half - 1;
+    } else {
+      len = half;
+    }
+  }
+  return first;
 }
 
 static int ssftblkeycmp(const char *s1, size_t n1, const char *s2, size_t n2) {
