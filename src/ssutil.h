@@ -69,6 +69,7 @@ enum {                                   /* enumeration for error codes */
 
 /* I/O */
 int sswrite(int fd, const void *buf, size_t size);
+int ssread(int fd, void *buf, size_t size);
 
 __SSUTIL_CLINKAGEEND
 #endif
