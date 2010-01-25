@@ -43,11 +43,11 @@ AC_CHECK_LIB([z], [gzopen])
 #------------------------------------------------------------------------------
 # Default Compiler Option
 if test "x$CC" = "xgcc" -o "x$CC" = "xccache gcc"; then
-  CFLAGS="$CFLAGS -O2 -g -Wswitch-enum -Wall -D_REENTRANT -Wformat=2 -pipe -D_FORTIFY_SOURCE=1 -Wcast-qual -Wcast-align -Wpointer-arith -Wwrite-strings -fno-omit-frame-pointer"
+  CFLAGS="$CFLAGS -O2 -g -Wswitch-enum -Wall -Wextra -D_REENTRANT -Wformat=2 -pipe -D_FORTIFY_SOURCE=1 -Wcast-qual -Wcast-align -Wpointer-arith -Wwrite-strings -fno-omit-frame-pointer"
 fi
 
 if test "x$CXX" = "xg++" -o "x$CXX" = "xccache g++"; then
-  CXXFLAGS="$CXXFLAGS -O2 -g -Wswitch-enum -Wall -D_REENTRANT -Wformat=2 -pipe -D_FORTIFY_SOURCE=1 -Wcast-qual -Wcast-align -Wpointer-arith -Wwrite-strings -Woverloaded-virtual -fno-omit-frame-pointer"
+  CXXFLAGS="$CXXFLAGS -O2 -g -Wswitch-enum -Wall -Wextra -D_REENTRANT -Wformat=2 -pipe -D_FORTIFY_SOURCE=1 -Wcast-qual -Wcast-align -Wpointer-arith -Wwrite-strings -Woverloaded-virtual -fno-omit-frame-pointer"
 fi
 
 #------------------------------------------------------------------------------
