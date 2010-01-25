@@ -17,7 +17,7 @@ SSBF *ssbfnew(uint64_t bsiz) {
   SSBF *bf = NULL;
   SSMALLOC(bf, sizeof(SSBF));
   ssbfclear(bf);
-  bf->bsiz = bsiz;
+  bf->mapsiz = bsiz;
   if (pthread_rwlock_init(&bf->mtx, NULL) != 0)
     goto err;
   return bf;
@@ -42,10 +42,11 @@ int ssbfopen(SSBF *bf, const char *path, int omode) {
 
 int ssbfclose(SSBF *bf) {
   assert(bf);
-  if (bf->b) {
-    assert(bf->bsiz > 0);
-    munmap(bf->b, bf->bsiz);
-    bf->b = NULL;
+  if (bf->map) {
+    assert(bf->mapsiz > 0);
+    munmap(bf->map, bf->mapsiz);
+    bf->map = NULL;
+    bf->mapsiz = 0;
   }
   if (bf->fd >= 0) {
     close(bf->fd);
@@ -65,8 +66,8 @@ int ssbfadd(SSBF *bf, const void *buf, int siz) {
   unsigned int i;
   for (i = 0; i < bf->nfuncs; i++) {
     uint64_t v = bf->funcs[i]((const char*)buf, siz);
-    uint64_t n = v % (bf->bsiz * CHAR_BIT);
-    SET_BIT(bf->b, n);
+    uint64_t n = v % (bf->mapsiz * CHAR_BIT);
+    SET_BIT(bf->map, n);
   }
   pthread_rwlock_unlock(&bf->mtx);
   return 0;
@@ -81,8 +82,8 @@ int ssbfhas(SSBF *bf, const void *buf, int siz) {
   unsigned int i;
   for (i = 0; i < bf->nfuncs; i++) {
     uint64_t v = bf->funcs[i]((const char*)buf, siz);
-    uint64_t n = v % (bf->bsiz * CHAR_BIT);
-    if (!GET_BIT(bf->b, n)) return 0;
+    uint64_t n = v % (bf->mapsiz * CHAR_BIT);
+    if (!GET_BIT(bf->map, n)) return 0;
   }
   pthread_rwlock_unlock(&bf->mtx);
   return 1;
@@ -96,8 +97,8 @@ int ssbfhas(SSBF *bf, const void *buf, int siz) {
 static void ssbfclear(SSBF *bf) {
   assert(bf);
   bf->fd = -1;
-  bf->b = NULL;
-  bf->bsiz = 0;
+  bf->map = NULL;
+  bf->mapsiz = 0;
   bf->omode = 0;
   bf->nfuncs = 0;
   bf->funcs = NULL;
@@ -124,21 +125,21 @@ static int ssbfopenimpl(SSBF *bf, const char *path, int omode) {
   int prot = 0;
   if (omode & SSBFOWRITER) prot |= PROT_WRITE;
   if (omode & SSBFOREADER) prot |= PROT_READ;
-  ptr = mmap(NULL, bf->bsiz, prot, MAP_SHARED, fd, 0);
+  ptr = mmap(NULL, bf->mapsiz, prot, MAP_SHARED, fd, 0);
   if (ptr == MAP_FAILED) {
     ssbfsetecode(bf, SSEMMAP);
     goto err;
   }
-  if (madvise(ptr, bf->bsiz, MADV_RANDOM) < 0) {
+  if (madvise(ptr, bf->mapsiz, MADV_RANDOM) < 0) {
     ssbfsetecode(bf, SSEMMAP);
     goto err;
   }
   bf->fd = fd;
-  bf->b = ptr;
+  bf->map = ptr;
   bf->omode = omode;
   return 0;
 err:
-  if (ptr) munmap(ptr, bf->bsiz);
+  if (ptr) munmap(ptr, bf->mapsiz);
   if (fd >= 0) close(fd);
   return -1;
 }

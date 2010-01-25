@@ -18,8 +18,8 @@ __SSBF_CLINKAGEBEGIN
 typedef uint64_t (*ssbf_hashfunc)(const char*, uint64_t size);
 typedef struct {
   int fd;
-  char *b;
-  uint64_t bsiz;
+  char *map;
+  uint64_t mapsiz;
   uint32_t omode;
   uint64_t nfuncs;
   ssbf_hashfunc *funcs;
