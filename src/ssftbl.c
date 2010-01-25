@@ -12,13 +12,16 @@
 static void ssftblclear(SSFTBL *tbl);
 static int ssftblwriteopenimpl(SSFTBL *tbl, const char *path);
 static int ssftblreadopenimpl(SSFTBL *tbl, const char *path);
+static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz);
 static int ssftbldumpmeta(SSFTBL *tbl);
+static int ssftblkeycmp(const char *s1, size_t n1, const char *s2, size_t n2);
+
 static void ssftblsetecode(SSFTBL *tbl, int ecode);
 
 /* private macros */
-#define LEXICO_GREATER(s1, s2) (strcmp(s1, s2)  > 0)
-#define LEXICO_EQUAL(s1, s2)   (strcmp(s1, s2) == 0)
-#define LEXICO_LESS(s1, s2)    (strcmp(s1, s2)  < 0)
+#define FTKEYCMPGREATER(s1, n1, s2, n2) (ssftblkeycmp(s1, n1, s2, n2)  > 0)
+#define FTKEYCMPEQUAL(s1, n1, s2, n2)   (ssftblkeycmp(s1, n1, s2, n2) == 0)
+#define FTKEYCMPLESS(s1, n1, s2, n2)    (ssftblkeycmp(s1, n1, s2, n2)  < 0)
 
 /*-----------------------------------------------------------------------------
  * APIs
@@ -67,42 +70,13 @@ int ssftblappend(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int 
     return -1;
   }
   if (tbl->lastappendedkey != NULL) {
-    // TODO: what about ksiz?
-    if (LEXICO_GREATER(tbl->lastappendedkey, kbuf)) {
-      /* keys must be written in lexicographically ascending order */
+    if (FTKEYCMPGREATER(tbl->lastappendedkey, tbl->lastappendedkeysiz, kbuf, ksiz)) {
+      /* keys must be appended in the lexicographically ascending order */
       ssftblsetecode(tbl, SSEINVALID);
       return -1;
     }
   }
-  int r;
-  uint64_t doff = lseek(tbl->dfd, 0, SEEK_END);
-  r = sswrite(tbl->dfd, &ksiz, sizeof(ksiz));
-  if (r < 0) goto ioerr;
-  r = sswrite(tbl->dfd, kbuf, ksiz);
-  if (r < 0) goto ioerr;
-  r = sswrite(tbl->ifd, &vsiz, sizeof(vsiz));
-  if (r < 0) goto ioerr;
-  r = sswrite(tbl->ifd, vbuf, vsiz);
-  if (r < 0) goto ioerr;
-  tbl->curblksiz += vsiz;
-  assert(tbl->blksiz > 0);
-  if (tbl->curblksiz >= tbl->blksiz) {
-    /* record into index file */
-    r = sswrite(tbl->ifd, &ksiz, sizeof(ksiz));
-    if (r < 0) goto ioerr;
-    r = sswrite(tbl->ifd, kbuf, ksiz);
-    if (r < 0) goto ioerr;
-    r = sswrite(tbl->ifd, &doff, sizeof(doff));
-    /* move to the next block */
-    tbl->curblksiz = 0;
-  }
-  tbl->lastappendedkey = realloc(tbl->lastappendedkey, tbl->lastappendedkeysiz);
-  memcpy(tbl->lastappendedkey, kbuf, ksiz);
-  tbl->lastappendedkeysiz = ksiz;
-  return 0;
-ioerr:
-  ssftblsetecode(tbl, SSEWRITE);
-  return -1;
+  return ssftblappendimpl(tbl, kbuf, ksiz, vbuf, vsiz);
 }
 
 int ssftblclose(SSFTBL *tbl) {
@@ -186,9 +160,41 @@ static int ssftblreadopenimpl(SSFTBL *tbl, const char *path) {
   return 0;
 }
 
+static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz) {
+  uint64_t doff = lseek(tbl->dfd, 0, SEEK_END);
+  if (sswrite(tbl->dfd, &ksiz, sizeof(ksiz)) != 0) goto err;
+  if (sswrite(tbl->dfd, kbuf, ksiz) != 0) goto err;
+  if (sswrite(tbl->ifd, &vsiz, sizeof(vsiz)) != 0) goto err;
+  if (sswrite(tbl->ifd, vbuf, vsiz) != 0) goto err;
+  tbl->curblksiz += vsiz;
+  assert(tbl->blksiz > 0);
+  if (tbl->curblksiz >= tbl->blksiz) {
+    /* record into index file */
+    if (sswrite(tbl->ifd, &ksiz, sizeof(ksiz)) != 0) goto err;
+    if (sswrite(tbl->ifd, kbuf, ksiz) != 0) goto err;
+    if (sswrite(tbl->ifd, &doff, sizeof(doff)) != 0) goto err;
+    /* move to the next block */
+    tbl->curblksiz = 0;
+  }
+  tbl->lastappendedkey = realloc(tbl->lastappendedkey, tbl->lastappendedkeysiz);
+  memcpy(tbl->lastappendedkey, kbuf, ksiz);
+  tbl->lastappendedkeysiz = ksiz;
+  return 0;
+err:
+  ssftblsetecode(tbl, SSEWRITE);
+  return -1;
+}
+
 static int ssftbldumpmeta(SSFTBL *tbl) {
   assert(tbl);
   return 0;
+}
+
+static int ssftblkeycmp(const char *s1, size_t n1, const char *s2, size_t n2) {
+  assert(s1 && s2);
+  if(n1 < n2) return -1;
+  else if(n1 > n2) return 1;
+  return memcmp(s1, s2, n1);
 }
 
 static void ssftblsetecode(SSFTBL *tbl, int ecode) {
