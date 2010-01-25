@@ -90,7 +90,7 @@ int ssbfclose(SSBF *bf) {
 #define GET_BIT(b, n) (b[n/CHAR_BIT] &  (1<<(n%CHAR_BIT)))
 int ssbfadd(SSBF *bf, const void *buf, int siz) {
   assert(bf && buf && siz > 0);
-  if (!pthread_rwlock_wrlock(&bf->mtx)) {
+  if (pthread_rwlock_wrlock(&bf->mtx)) {
     ssbfsetecode(bf, SSETHREAD);
     return -1;
   }
@@ -106,7 +106,7 @@ int ssbfadd(SSBF *bf, const void *buf, int siz) {
 
 int ssbfhas(SSBF *bf, const void *buf, int siz) {
   assert(bf && buf && siz > 0);
-  if (!pthread_rwlock_rdlock(&bf->mtx)) {
+  if (pthread_rwlock_rdlock(&bf->mtx)) {
     ssbfsetecode(bf, SSETHREAD);
     return -1;
   }
