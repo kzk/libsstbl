@@ -7,6 +7,7 @@
 
 /* private function prototypes */
 static void ssbfclear(SSBF *bf);
+static int ssbfopenimpl(SSBF *bf, const char *path, int omode);
 static void ssbfsetecode(SSBF *bf, int ecode);
 
 /*-----------------------------------------------------------------------------
@@ -35,6 +36,75 @@ int ssbfopen(SSBF *bf, const char *path, int omode) {
     ssbfsetecode(bf, SSEINVALID);
     return -1;
   }
+  return ssbfopenimpl(bf, path, omode);
+}
+
+int ssbfclose(SSBF *bf) {
+  assert(bf);
+  if (bf->b) {
+    assert(bf->bsiz > 0);
+    munmap(bf->b, bf->bsiz);
+    bf->b = NULL;
+  }
+  if (bf->fd >= 0) {
+    close(bf->fd);
+    bf->fd = -1;
+  }
+  return 0;
+}
+
+#define SET_BIT(b, n) (b[n/CHAR_BIT] |= (1<<(n%CHAR_BIT)))
+#define GET_BIT(b, n) (b[n/CHAR_BIT] &  (1<<(n%CHAR_BIT)))
+int ssbfadd(SSBF *bf, const void *buf, int siz) {
+  assert(bf && buf && siz > 0);
+  if (pthread_rwlock_wrlock(&bf->mtx)) {
+    ssbfsetecode(bf, SSETHREAD);
+    return -1;
+  }
+  unsigned int i;
+  for (i = 0; i < bf->nfuncs; i++) {
+    uint64_t v = bf->funcs[i]((const char*)buf, siz);
+    uint64_t n = v % (bf->bsiz * CHAR_BIT);
+    SET_BIT(bf->b, n);
+  }
+  pthread_rwlock_unlock(&bf->mtx);
+  return 0;
+}
+
+int ssbfhas(SSBF *bf, const void *buf, int siz) {
+  assert(bf && buf && siz > 0);
+  if (pthread_rwlock_rdlock(&bf->mtx)) {
+    ssbfsetecode(bf, SSETHREAD);
+    return -1;
+  }
+  unsigned int i;
+  for (i = 0; i < bf->nfuncs; i++) {
+    uint64_t v = bf->funcs[i]((const char*)buf, siz);
+    uint64_t n = v % (bf->bsiz * CHAR_BIT);
+    if (!GET_BIT(bf->b, n)) return 0;
+  }
+  pthread_rwlock_unlock(&bf->mtx);
+  return 1;
+}
+#undef SET_BIT
+#undef GET_BIT
+
+/*-----------------------------------------------------------------------------
+ * private functions
+ */
+static void ssbfclear(SSBF *bf) {
+  assert(bf);
+  bf->fd = -1;
+  bf->b = NULL;
+  bf->bsiz = 0;
+  bf->omode = 0;
+  bf->nfuncs = 0;
+  bf->funcs = NULL;
+  bf->ecode = SSESUCCESS;
+}
+
+static int ssbfopenimpl(SSBF *bf, const char *path, int omode) {
+  
   int fd = -1;
   void *ptr = NULL;
   int oflag = O_RDWR;
@@ -70,70 +140,6 @@ err:
   if (ptr) munmap(ptr, bf->bsiz);
   if (fd >= 0) close(fd);
   return -1;
-}
-
-int ssbfclose(SSBF *bf) {
-  assert(bf);
-  if (bf->b) {
-    assert(bf->bsiz > 0);
-    munmap(bf->b, bf->bsiz);
-    bf->b = NULL;
-  }
-  if (bf->fd >= 0) {
-    close(bf->fd);
-    bf->fd = -1;
-  }
-  return 0;
-}
-
-#define SET_BIT(b, n) (b[n/CHAR_BIT] |= (1<<(n%CHAR_BIT)))
-#define GET_BIT(b, n) (b[n/CHAR_BIT] &  (1<<(n%CHAR_BIT)))
-int ssbfadd(SSBF *bf, const void *buf, int siz) {
-  assert(bf && buf && siz > 0);
-  if (pthread_rwlock_wrlock(&bf->mtx)) {
-    ssbfsetecode(bf, SSETHREAD);
-    return -1;
-  }
-  int i;
-  for (i = 0; i < bf->nfuncs; i++) {
-    uint64_t v = bf->funcs[i]((const char*)buf, siz);
-    uint64_t n = v % (bf->bsiz * CHAR_BIT);
-    SET_BIT(bf->b, n);
-  }
-  pthread_rwlock_unlock(&bf->mtx);
-  return 0;
-}
-
-int ssbfhas(SSBF *bf, const void *buf, int siz) {
-  assert(bf && buf && siz > 0);
-  if (pthread_rwlock_rdlock(&bf->mtx)) {
-    ssbfsetecode(bf, SSETHREAD);
-    return -1;
-  }
-  int i;
-  for (i = 0; i < bf->nfuncs; i++) {
-    uint64_t v = bf->funcs[i]((const char*)buf, siz);
-    uint64_t n = v % (bf->bsiz * CHAR_BIT);
-    if (!GET_BIT(bf->b, n)) return 0;
-  }
-  pthread_rwlock_unlock(&bf->mtx);
-  return 1;
-}
-#undef SET_BIT
-#undef GET_BIT
-
-/*-----------------------------------------------------------------------------
- * private functions
- */
-static void ssbfclear(SSBF *bf) {
-  assert(bf);
-  bf->fd = -1;
-  bf->b = NULL;
-  bf->bsiz = 0;
-  bf->omode = 0;
-  bf->nfuncs = 0;
-  bf->funcs = NULL;
-  bf->ecode = SSESUCCESS;
 }
 
 static void ssbfsetecode(SSBF *bf, int ecode)
