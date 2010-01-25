@@ -28,6 +28,8 @@ err:
 
 void ssbfdel(SSBF *bf) {
   assert(bf);
+  if (bf->fd >= 0)
+    ssbfclose(bf);
   pthread_rwlock_destroy(&bf->mtx);
   SSFREE(bf);
 }
