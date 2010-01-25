@@ -37,6 +37,7 @@ int ssftbltune(SSFTBL *tbl, uint64_t blksiz);
 
 int ssftblopen(SSFTBL *tbl, const char *path, enum SSFTBLOMODE omode);
 int ssftblclose(SSFTBL *tbl);
+int ssftblunlink(SSFTBL *tbl);
 
 int ssftblappend(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz);
 void *ssftblget(SSFTBL *tbl, const void *kbuf, int ksiz, int *sp);

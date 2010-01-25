@@ -62,5 +62,8 @@ enum {                                   /* enumeration for error codes */
     break;					\
   } while (1)
 
+/* I/O */
+int sswrite(int fd, const void *buf, size_t size);
+
 __SSUTIL_CLINKAGEEND
 #endif

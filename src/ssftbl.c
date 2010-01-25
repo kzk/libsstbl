@@ -96,6 +96,9 @@ int ssftblappend(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int 
     /* move to the next block */
     tbl->curblksiz = 0;
   }
+  tbl->lastappendedkey = realloc(tbl->lastappendedkey, tbl->lastappendedkeysiz);
+  memcpy(tbl->lastappendedkey, kbuf, ksiz);
+  tbl->lastappendedkeysiz = ksiz;
   return 0;
 ioerr:
   ssftblsetecode(tbl, SSEWRITE);
@@ -148,12 +151,15 @@ static int ssftblwriteopenimpl(SSFTBL *tbl, const char *path) {
   int fds[2]; /* fd[0] -> dfd, fd[1] -> ifd */
   int oflag = O_WRONLY | O_CREAT | O_TRUNC | O_APPEND;
   char *paths[2];
-  SSMALLOC(paths[0], strlen(path) + strlen(".ssd"));
-  SSMALLOC(paths[1], strlen(path) + strlen(".ssi"));
+  SSMALLOC(paths[0], strlen(path) + strlen(".sstbld") + 1);
+  SSMALLOC(paths[1], strlen(path) + strlen(".sstbli") + 1);
+  sprintf(paths[0], "%s.sstbld", path);
+  sprintf(paths[1], "%s.sstbli", path);
   for (i = 0; i < 2; i++) {
     int fd;
-    SSSYS_NOINTR(fd, open(paths[i], oflag));
+    SSSYS_NOINTR(fd, open(paths[i], oflag, 0644));
     if (fd < 0) {
+      perror("error");
       int ecode = SSEOPEN;
       switch (errno) {
       case EACCES: ecode = SSENOPERM; break;
@@ -167,6 +173,7 @@ static int ssftblwriteopenimpl(SSFTBL *tbl, const char *path) {
   }
   tbl->dfd = fds[0];
   tbl->ifd = fds[1];
+  tbl->omode = SSFTBLOWRITER;
   return 0;
 err:
   for (i = 0; i < 2; i++)
