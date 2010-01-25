@@ -29,6 +29,7 @@ err:
 void ssbfdel(SSBF *bf) {
   assert(bf);
   pthread_rwlock_destroy(&bf->mtx);
+  SSFREE(bf);
 }
 
 int ssbfopen(SSBF *bf, const char *path, int omode) {
