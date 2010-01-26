@@ -274,32 +274,36 @@ static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kb, int k
   assert(e && kb && ks);
   int r;
   int dfd = dup(tbl->dfd);
-  if (lseek(dfd, e->doff, SEEK_SET) != e->doff) {
+  if (lseek(dfd, e->doff, SEEK_SET) != (off_t)e->doff) {
     ssftblsetecode(tbl, SSESEEK);
     SSSYS_NOINTR(r, close(dfd));
     return NULL;
   }
+  // TODO: posix_fadvise
   uint64_t curblksiz = 0;
+  int ksiz; char *kbuf = NULL; int vsiz; char *vbuf = NULL;
   while (1) {
-    int ksiz; char *kbuf; int vsiz; char *vbuf;
-    ssread(dfd, &ksiz, sizeof(ksiz));
-    SSMALLOC(kbuf, ksiz);
-    ssread(dfd, kbuf, ksiz);
-    ssread(dfd, &vsiz, sizeof(vsiz));
-    SSMALLOC(vbuf, vsiz);
-    ssread(dfd, vbuf, vsiz);
+    /* read key */
+    if (ssread(dfd, &ksiz, sizeof(ksiz)) < 0) break;
+    SSREALLOC(kbuf, kbuf, ksiz);
+    if (ssread(dfd, kbuf, ksiz) < 0) break;
+    /* read val */
+    if (ssread(dfd, &vsiz, sizeof(vsiz)) < 0) break;
+    SSREALLOC(vbuf, vbuf, vsiz);
+    if (ssread(dfd, vbuf, vsiz) < 0) break;
+    /* compare */
     if (FTKEYCMPEQUAL(kbuf, ksiz, kb, ks)) {
       if (sp) *sp = vsiz;
       SSFREE(kbuf);
       SSSYS_NOINTR(r, close(dfd));
       return vbuf;
     }
-    SSFREE(kbuf);
-    SSFREE(vbuf);
     curblksiz += vsiz;
     if (curblksiz >= tbl->blksiz)
       break;
   }
+  if (kbuf) SSFREE(kbuf);
+  if (vbuf) SSFREE(vbuf);
   SSSYS_NOINTR(r, close(dfd));
   return NULL;
 }
