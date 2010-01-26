@@ -1,10 +1,21 @@
 #include <ssftbl.h>
 
+#include <map>
 #include <vector>
 #include <string>
 #include <gtest/gtest.h>
 
 using namespace std;
+
+namespace {
+string get_random_str(int minlen, int maxlen) {
+  string s;
+  int len = minlen + rand() % (maxlen - minlen);
+  for (int i = 0; i < len; i++)
+    s += 'a' + rand() % 26;
+  return s;
+}
+}
 
 class SSFTBLTestFixture : public testing::Test {
 protected:
@@ -170,4 +181,67 @@ TEST_F(SSFTBLReaderTestFixture, get1) {
   p = ssftblget(ftbl, key.c_str(), key.size(), &sp);
   ASSERT_TRUE(p != NULL);
   ASSERT_EQ("val3", string((const char*)p, sp));
+}
+
+class SSFTBLSingleThreadTestFixture : public SSFTBLTestFixture {
+protected:
+  void SetUp() {
+    dbname = "./ssftblsinglethreadtest";
+    unlink((dbname + ".sstbld").c_str());
+    unlink((dbname + ".sstbli").c_str());
+
+    SSFTBLTestFixture::SetUp();
+    int r;
+    r = ssftblopen(ftbl, dbname.c_str(), SSFTBLOWRITER);
+    ASSERT_EQ(0, r);
+    for (int i = 0; i < 15; i++) {
+      string key = get_random_str(10, 20);
+      if (m.find(key) != m.end()) {
+        i--;
+        continue;
+      }
+      string val = get_random_str(1204, 1025);
+      m[key] = val;
+    }
+    for (map<string, string>::const_iterator it = m.begin(); it != m.end(); ++it) {
+      const string &key = it->first;
+      const string &val = it->second;
+      r = ssftblappend(ftbl, key.c_str(), key.size(), val.c_str(), val.size());
+      ASSERT_EQ(0, r);
+    }
+    r = ssftblclose(ftbl);
+    ASSERT_EQ(0, r);
+
+    r = ssftblopen(ftbl, dbname.c_str(), SSFTBLOREADER);
+    ASSERT_EQ(0, r);
+  }
+  void TearDown() {
+    int r;
+    r = ssftblclose(ftbl);
+    ASSERT_EQ(0, r);
+
+    ASSERT_EQ(0, unlink((dbname + ".sstbld").c_str()));
+    ASSERT_EQ(0, unlink((dbname + ".sstbli").c_str()));
+
+    SSFTBLTestFixture::TearDown();
+  }
+  string dbname;
+  map<string, string> m;
+};
+
+TEST_F(SSFTBLSingleThreadTestFixture, open_close) {
+  // nothing
+  ;
+}
+
+TEST_F(SSFTBLSingleThreadTestFixture, get_many) {
+  for (map<string, string>::const_iterator it = m.begin(); it != m.end(); ++it) {
+    int sp;
+    const string &key = it->first;
+    const string &val = it->second;
+    void *p = ssftblget(ftbl, key.c_str(), key.size(), &sp);
+    ASSERT_TRUE(p != NULL);
+    ASSERT_EQ(val, string((const char*)p, sp));
+    free(p);
+  }
 }
