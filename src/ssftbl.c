@@ -272,24 +272,26 @@ static SSFTBLIDXENT *ssftblindexlowerbound(SSFTBL *tbl, const void *kbuf, int ks
 
 static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kb, int ks, int *sp) {
   assert(e && kb && ks);
-  // TODO: make thread-safe
-  if (lseek(tbl->dfd, e->doff, SEEK_SET) != e->doff) {
+  int r;
+  int dfd = dup(tbl->dfd);
+  if (lseek(dfd, e->doff, SEEK_SET) != e->doff) {
     ssftblsetecode(tbl, SSESEEK);
+    SSSYS_NOINTR(r, close(dfd));
     return NULL;
   }
   uint64_t curblksiz = 0;
   while (1) {
     int ksiz; char *kbuf; int vsiz; char *vbuf;
-    ssread(tbl->dfd, &ksiz, sizeof(ksiz));
+    ssread(dfd, &ksiz, sizeof(ksiz));
     SSMALLOC(kbuf, ksiz);
-    ssread(tbl->dfd, kbuf, ksiz);
-    ssread(tbl->dfd, &vsiz, sizeof(vsiz));
+    ssread(dfd, kbuf, ksiz);
+    ssread(dfd, &vsiz, sizeof(vsiz));
     SSMALLOC(vbuf, vsiz);
-    ssread(tbl->dfd, vbuf, vsiz);
+    ssread(dfd, vbuf, vsiz);
     if (FTKEYCMPEQUAL(kbuf, ksiz, kb, ks)) {
       if (sp) *sp = vsiz;
       SSFREE(kbuf);
-      SSFREE(vbuf);
+      SSSYS_NOINTR(r, close(dfd));
       return vbuf;
     }
     SSFREE(kbuf);
@@ -298,6 +300,7 @@ static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kb, int k
     if (curblksiz >= tbl->blksiz)
       break;
   }
+  SSSYS_NOINTR(r, close(dfd));
   return NULL;
 }
 
