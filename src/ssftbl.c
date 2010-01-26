@@ -13,7 +13,7 @@ static void ssftblclear(SSFTBL *tbl);
 static int ssftblopenimpl(SSFTBL *tbl, const char *path, int oflag);
 static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz);
 static int ssftblloadindex(SSFTBL *tbl);
-static SSFTBLIDXENT *ssftblindexlowerbound(SSFTBL *tbl, const void *kbuf, int ksiz);
+static SSFTBLIDXENT *ssftblindexupperbound(SSFTBL *tbl, const void *kbuf, int ksiz);
 static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kbuf, int ksiz, int *sp);
 static int ssftblkeycmp(const char *s1, size_t n1, const char *s2, size_t n2);
 static void ssftblsetecode(SSFTBL *tbl, int ecode);
@@ -131,16 +131,15 @@ int ssftblappend(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int 
 
 void *ssftblget(SSFTBL *tbl, const void *kbuf, int ksiz, int *sp) {
   if (tbl->idxsiz == 0) return NULL;
-  SSFTBLIDXENT *lbound = ssftblindexlowerbound(tbl, kbuf, ksiz);
+  SSFTBLIDXENT *ubound = ssftblindexupperbound(tbl, kbuf, ksiz);
   SSFTBLIDXENT *first = tbl->idx;
   SSFTBLIDXENT *last = tbl->idx + tbl->idxsiz;
-  if (lbound == first && FTKEYCMPLESS(kbuf, ksiz, first->kbuf, first->ksiz))
+  if (ubound == first)
     return NULL;
-  if (lbound == last)
+  if (ubound == last && FTKEYCMPGREATER(kbuf, ksiz, (last-1)->kbuf, (last-1)->ksiz))
     return NULL;
-  SSFTBLIDXENT *e = lbound - 1;
-  if (lbound == first && FTKEYCMPEQUAL(kbuf, ksiz, first->kbuf, first->ksiz))
-    e = first;
+  SSFTBLIDXENT *e = ubound - 1;
+  assert(first <= e && e < last);
   return ssftblgetbyscan(tbl, e, kbuf, ksiz, sp);
 }
 
@@ -200,12 +199,6 @@ err:
 
 static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz) {
   uint64_t doff = lseek(tbl->dfd, 0, SEEK_END);
-  if (sswrite(tbl->dfd, &ksiz, sizeof(ksiz)) != 0) goto err;
-  if (sswrite(tbl->dfd, kbuf, ksiz) != 0) goto err;
-  if (sswrite(tbl->dfd, &vsiz, sizeof(vsiz)) != 0) goto err;
-  if (sswrite(tbl->dfd, vbuf, vsiz) != 0) goto err;
-  tbl->curblksiz += vsiz;
-  assert(tbl->blksiz > 0);
   if (tbl->lastappended.kbuf == NULL || tbl->curblksiz >= tbl->blksiz) {
     /* record into index file */
     if (sswrite(tbl->ifd, &ksiz, sizeof(ksiz)) != 0) goto err;
@@ -214,6 +207,12 @@ static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void 
     /* move to the next block */
     tbl->curblksiz = 0;
   }
+  if (sswrite(tbl->dfd, &ksiz, sizeof(ksiz)) != 0) goto err;
+  if (sswrite(tbl->dfd, kbuf, ksiz) != 0) goto err;
+  if (sswrite(tbl->dfd, &vsiz, sizeof(vsiz)) != 0) goto err;
+  if (sswrite(tbl->dfd, vbuf, vsiz) != 0) goto err;
+  tbl->curblksiz += vsiz;
+  assert(tbl->blksiz > 0);
   SSREALLOC(tbl->lastappended.kbuf, tbl->lastappended.kbuf, ksiz);
   memcpy(tbl->lastappended.kbuf, kbuf, ksiz);
   tbl->lastappended.ksiz = ksiz;
@@ -249,7 +248,7 @@ static int ssftblloadindex(SSFTBL *tbl) {
   return 0;
 }
 
-static SSFTBLIDXENT *ssftblindexlowerbound(SSFTBL *tbl, const void *kbuf, int ksiz) {
+static SSFTBLIDXENT *ssftblindexupperbound(SSFTBL *tbl, const void *kbuf, int ksiz) {
   assert(tbl && kbuf && ksiz);
   uint32_t len = tbl->idxsiz;
   uint32_t half;
@@ -259,12 +258,12 @@ static SSFTBLIDXENT *ssftblindexlowerbound(SSFTBL *tbl, const void *kbuf, int ks
   while (len > 0) {
     half = len >> 1;
     middle = first + half;
-    if (FTKEYCMPLESS(middle->kbuf, middle->ksiz, kbuf, ksiz)) {
+    if (FTKEYCMPLESS(kbuf, ksiz, middle->kbuf, middle->ksiz)) {
+      len = half;
+    } else {
       first = middle;
       first++;
       len = len - half - 1;
-    } else {
-      len = half;
     }
   }
   return first;
