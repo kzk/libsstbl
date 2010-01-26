@@ -209,12 +209,12 @@ static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void 
   if (tbl->lastappended.kbuf == NULL || tbl->curblksiz >= tbl->blksiz) {
     /* record into index file */
     if (sswrite(tbl->ifd, &ksiz, sizeof(ksiz)) != 0) goto err;
-    if (sswrite(tbl->ifd, kbuf, ksiz) != 0) goto err;
+    if (sswrite(tbl->ifd, kbuf,  ksiz)         != 0) goto err;
     if (sswrite(tbl->ifd, &doff, sizeof(doff)) != 0) goto err;
     /* move to the next block */
     tbl->curblksiz = 0;
   }
-  SSREALLOC(tbl->lastappended.kbuf, tbl->lastappended.kbuf, tbl->lastappended.ksiz);
+  SSREALLOC(tbl->lastappended.kbuf, tbl->lastappended.kbuf, ksiz);
   memcpy(tbl->lastappended.kbuf, kbuf, ksiz);
   tbl->lastappended.ksiz = ksiz;
   tbl->lastappended.doff = doff;
@@ -272,6 +272,7 @@ static SSFTBLIDXENT *ssftblindexlowerbound(SSFTBL *tbl, const void *kbuf, int ks
 
 static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kb, int ks, int *sp) {
   assert(e && kb && ks);
+  // TODO: mmap is more faster?
   int r;
   int dfd = dup(tbl->dfd);
   if (lseek(dfd, e->doff, SEEK_SET) != (off_t)e->doff) {
@@ -309,10 +310,15 @@ static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kb, int k
 }
 
 static int ssftblkeycmp(const char *s1, size_t n1, const char *s2, size_t n2) {
+  /* same with std::string ordering */
   assert(s1 && s2);
-  if(n1 < n2) return -1;
-  else if(n1 > n2) return 1;
-  return memcmp(s1, s2, n1);
+  size_t min = (n1 < n2) ? n1 : n2;
+  int r = memcmp(s1, s2, min);
+  if (r == 0) {
+    if (n1 == n2) return 0;
+    return (n1 < n2) ? -1 : 1;
+  }
+  return r;
 }
 
 static void ssftblsetecode(SSFTBL *tbl, int ecode) {
