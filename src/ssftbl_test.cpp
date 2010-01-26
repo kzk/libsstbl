@@ -162,11 +162,12 @@ TEST_F(SSFTBLReaderTestFixture, get1) {
   key = "key1";
   p = ssftblget(ftbl, key.c_str(), key.size(), &sp);
   ASSERT_TRUE(p != NULL);
+  ASSERT_EQ("val1", string((const char*)p, sp));
   key = "key2";
   p = ssftblget(ftbl, key.c_str(), key.size(), &sp);
-  ASSERT_TRUE(p != NULL);
+  ASSERT_TRUE(p == NULL);
   key = "key3";
   p = ssftblget(ftbl, key.c_str(), key.size(), &sp);
   ASSERT_TRUE(p != NULL);
-
+  ASSERT_EQ("val3", string((const char*)p, sp));
 }

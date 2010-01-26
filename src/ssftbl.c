@@ -14,6 +14,7 @@ static int ssftblopenimpl(SSFTBL *tbl, const char *path, int oflag);
 static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz);
 static int ssftblloadindex(SSFTBL *tbl);
 static SSFTBLIDXENT *ssftblindexlowerbound(SSFTBL *tbl, const void *kbuf, int ksiz);
+static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kbuf, int ksiz, int *sp);
 static int ssftblkeycmp(const char *s1, size_t n1, const char *s2, size_t n2);
 static void ssftblsetecode(SSFTBL *tbl, int ecode);
 
@@ -137,7 +138,10 @@ void *ssftblget(SSFTBL *tbl, const void *kbuf, int ksiz, int *sp) {
     return NULL;
   if (lbound == last)
     return NULL;
-  return strdup("aiueo");
+  SSFTBLIDXENT *e = lbound - 1;
+  if (lbound == first && FTKEYCMPEQUAL(kbuf, ksiz, first->kbuf, first->ksiz))
+    e = first;
+  return ssftblgetbyscan(tbl, e, kbuf, ksiz, sp);
 }
 
 /*-----------------------------------------------------------------------------
@@ -245,8 +249,7 @@ static int ssftblloadindex(SSFTBL *tbl) {
   return 0;
 }
 
-static SSFTBLIDXENT *ssftblindexlowerbound(SSFTBL *tbl, const void *kbuf, int ksiz)
-{
+static SSFTBLIDXENT *ssftblindexlowerbound(SSFTBL *tbl, const void *kbuf, int ksiz) {
   assert(tbl && kbuf && ksiz);
   uint32_t len = tbl->idxsiz;
   uint32_t half;
@@ -265,6 +268,37 @@ static SSFTBLIDXENT *ssftblindexlowerbound(SSFTBL *tbl, const void *kbuf, int ks
     }
   }
   return first;
+}
+
+static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kb, int ks, int *sp) {
+  assert(e && kb && ks);
+  // TODO: make thread-safe
+  if (lseek(tbl->dfd, e->doff, SEEK_SET) != e->doff) {
+    ssftblsetecode(tbl, SSESEEK);
+    return NULL;
+  }
+  uint64_t curblksiz = 0;
+  while (1) {
+    int ksiz; char *kbuf; int vsiz; char *vbuf;
+    ssread(tbl->dfd, &ksiz, sizeof(ksiz));
+    SSMALLOC(kbuf, ksiz);
+    ssread(tbl->dfd, kbuf, ksiz);
+    ssread(tbl->dfd, &vsiz, sizeof(vsiz));
+    SSMALLOC(vbuf, vsiz);
+    ssread(tbl->dfd, vbuf, vsiz);
+    if (FTKEYCMPEQUAL(kbuf, ksiz, kb, ks)) {
+      if (sp) *sp = vsiz;
+      SSFREE(kbuf);
+      SSFREE(vbuf);
+      return vbuf;
+    }
+    SSFREE(kbuf);
+    SSFREE(vbuf);
+    curblksiz += vsiz;
+    if (curblksiz >= tbl->blksiz)
+      break;
+  }
+  return NULL;
 }
 
 static int ssftblkeycmp(const char *s1, size_t n1, const char *s2, size_t n2) {
