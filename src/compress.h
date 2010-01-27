@@ -13,6 +13,10 @@ __SSCOMPRESS_CLINKAGEBEGIN
 #include <pthread.h>
 #include <tcutil.h>
 
+/* none */
+char *sscodec_nonecompress(const char *ptr, int size, int *sp);
+char *sscodec_nonedecompress(const char *ptr, int size, int *sp);
+
 /* lzo */
 char *sscodec_lzocompress(const char *ptr, int size, int *sp);
 char *sscodec_lzodecompress(const char *ptr, int size, int * sp);
