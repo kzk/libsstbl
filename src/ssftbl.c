@@ -174,8 +174,12 @@ void *ssftblget(SSFTBL *tbl, const void *kbuf, int ksiz, int *sp) {
   assert(first <= ubound && ubound <= last);
   if (ubound == first)
     return NULL;
-  if (ubound == last && FTKEYCMPGREATER(kbuf, ksiz, (last-1)->kbuf, (last-1)->ksiz))
-    return NULL;
+  if (ubound == last) {
+    if (FTKEYCMPGREATER(kbuf, ksiz, (last-1)->kbuf, (last-1)->ksiz))
+      return NULL;
+    if (FTKEYCMPEQUAL(kbuf, ksiz, (last-1)->kbuf, (last-1)->ksiz))
+      ubound--;
+  }
   SSFTBLIDXENT *e = ubound - 1;
   assert(first <= e && e < last);
   return ssftblgetbyscan(tbl, e, kbuf, ksiz, sp);
@@ -227,20 +231,25 @@ err:
 
 static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz) {
   assert(tbl->blksiz > 0);
-  uint64_t doff = lseek(tbl->dfd, 0, SEEK_END);
   int isfirstappend = (tbl->lastappended.kbuf == NULL);
   int ismovetonext = (tbl->curblksiz >= tbl->blksiz);
   if (isfirstappend || ismovetonext) {
     tbl->idxnum++;
+    /* write current blkbuf */
+    uint64_t doff = 0;
+    if (isfirstappend) {
+      doff = lseek(tbl->dfd, 0, SEEK_END);
+    } else if (ismovetonext) {
+      if (ssftbldumpcurblk(tbl, tbl->dfd, tbl->blkbuf, tbl->curblksiz) != 0)
+        return -1;
+      doff = lseek(tbl->dfd, 0, SEEK_END);
+    }
     /* record the index entry */
     SSREALLOC(tbl->idx, tbl->idx, sizeof(SSFTBLIDXENT) * tbl->idxnum);
     SSMALLOC(tbl->idx[tbl->idxnum-1].kbuf, ksiz);
     memcpy(tbl->idx[tbl->idxnum-1].kbuf, kbuf, ksiz);
     tbl->idx[tbl->idxnum-1].ksiz = ksiz;
     tbl->idx[tbl->idxnum-1].doff = doff;
-    /* write current blkbuf */
-    if (ismovetonext && ssftbldumpcurblk(tbl, tbl->dfd, tbl->blkbuf, tbl->curblksiz) != 0)
-      return -1;
     /* move to the next block */
     SSREALLOC(tbl->blkbuf, tbl->blkbuf, tbl->blksiz);
     tbl->blkbufsiz = tbl->blksiz;
@@ -265,7 +274,6 @@ static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void 
   SSREALLOC(tbl->lastappended.kbuf, tbl->lastappended.kbuf, ksiz);
   memcpy(tbl->lastappended.kbuf, kbuf, ksiz);
   tbl->lastappended.ksiz = ksiz;
-  tbl->lastappended.doff = doff;
   return 0;
 }
 
