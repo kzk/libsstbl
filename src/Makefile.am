@@ -4,7 +4,8 @@ libsstbl_la_SOURCES = \
   ssftbl.h ssftbl.c \
   ssmtbl.h ssmtbl.c \
   ssbf.h ssbf.c \
-  ssutil.h ssutil.c
+  ssutil.h ssutil.c \
+  compress.h compress.c
 
 libsstbl_la_LIBADD = \
   -lpthread -lm -ltokyocabinet
