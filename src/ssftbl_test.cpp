@@ -189,13 +189,13 @@ protected:
     int r;
     r = ssftblopen(ftbl, dbname.c_str(), SSFTBLOWRITER);
     ASSERT_EQ(0, r);
-    for (int i = 0; i < 15; i++) {
+    for (int i = 0; i < 100; i++) {
       string key = get_random_str(10, 20);
       if (m.find(key) != m.end()) {
         i--;
         continue;
       }
-      string val = get_random_str(1204, 1025);
+      string val = get_random_str(1024 * 1, 1024 * 40);
       m[key] = val;
     }
     for (map<string, string>::const_iterator it = m.begin(); it != m.end(); ++it) {
@@ -234,6 +234,8 @@ TEST_F(SSFTBLSingleThreadTestFixture, get_many) {
     const string &key = it->first;
     const string &val = it->second;
     void *p = ssftblget(ftbl, key.c_str(), key.size(), &sp);
+    if (p == NULL)
+      cerr << "errkey:" << key << endl;
     ASSERT_TRUE(p != NULL);
     ASSERT_EQ(val, string((const char*)p, sp));
     free(p);
