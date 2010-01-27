@@ -15,8 +15,9 @@
 #define FTBLIDXOFF    48                /* index info offset */
 
 /* const or default parameters */
-#define FTBLFILEMODE 00644          /* permission of created files */
-#define DEFBLKSIZ (64 * 1024)       /* default data block size */
+#define FTBLFILEMODE    00644           /* permission of created files */
+#define FTBLFILESUFFIX ".sstbl"         /* suffix of data file */
+#define DEFBLKSIZ      (64 * 1024)      /* default data block size */
 
 /* private function prototypes */
 static void ssftblclear(SSFTBL *tbl);
@@ -192,8 +193,8 @@ static void ssftblclear(SSFTBL *tbl) {
 static int ssftblopenimpl(SSFTBL *tbl, const char *basepath, int oflag) {
   int r, fd;
   char *path;
-  SSMALLOC(path, strlen(basepath) + strlen(".sstbl"));
-  sprintf(path, "%s.sstbl", basepath);
+  SSMALLOC(path, strlen(basepath) + strlen(FTBLFILESUFFIX));
+  sprintf(path, "%s.%s", basepath, FTBLFILESUFFIX);
   SSSYS_NOINTR(fd, open(path, oflag, FTBLFILEMODE));
   if (fd < 0) {
     int ecode = SSEOPEN;
