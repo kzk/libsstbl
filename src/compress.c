@@ -2,6 +2,27 @@
 #include <compress.h>
 
 /*-----------------------------------------------------------------------------
+ * none
+ */
+char *sscodec_nonecompress(const char *ptr, int size, int *sp) {
+  if (ptr == NULL || size == 0 || sp == NULL) return NULL;
+  char *ret = NULL;
+  SSMALLOC(ret, size);
+  memcpy(ret, ptr, size);
+  *sp = size;
+  return ret;
+}
+
+char *sscodec_nonedecompress(const char *ptr, int size, int *sp) {
+  if (ptr == NULL || size == 0 || sp == NULL) return NULL;
+  char *ret = NULL;
+  SSMALLOC(ret, size);
+  memcpy(ret, ptr, size);
+  *sp = size;
+  return ret;
+}
+
+/*-----------------------------------------------------------------------------
  * LZO
  */
 #include <lzo/lzo1x.h>
