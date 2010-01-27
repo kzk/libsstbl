@@ -38,8 +38,7 @@ class SSFTBLWriterTestFixture : public SSFTBLTestFixture {
 protected:
   void SetUp() {
     dbname = "./ssftblwritertest";
-    unlink((dbname + ".sstbld").c_str());
-    unlink((dbname + ".sstbli").c_str());
+    unlink((dbname + ".sstbl").c_str());
 
     SSFTBLTestFixture::SetUp();
     int r;
@@ -51,8 +50,7 @@ protected:
     r = ssftblclose(ftbl);
     ASSERT_EQ(0, r);
 
-    ASSERT_EQ(0, unlink((dbname + ".sstbld").c_str()));
-    ASSERT_EQ(0, unlink((dbname + ".sstbli").c_str()));
+    ASSERT_EQ(0, unlink((dbname + ".sstbl").c_str()));
 
     SSFTBLTestFixture::TearDown();
   }
@@ -110,8 +108,7 @@ class SSFTBLReaderTestFixture : public SSFTBLTestFixture {
 protected:
   void SetUp() {
     dbname = "./ssftblreadertest";
-    unlink((dbname + ".sstbld").c_str());
-    unlink((dbname + ".sstbli").c_str());
+    unlink((dbname + ".sstbl").c_str());
 
     SSFTBLTestFixture::SetUp();
     int r;
@@ -143,8 +140,7 @@ protected:
     r = ssftblclose(ftbl);
     ASSERT_EQ(0, r);
 
-    ASSERT_EQ(0, unlink((dbname + ".sstbld").c_str()));
-    ASSERT_EQ(0, unlink((dbname + ".sstbli").c_str()));
+    ASSERT_EQ(0, unlink((dbname + ".sstbl").c_str()));
 
     SSFTBLTestFixture::TearDown();
   }
@@ -187,8 +183,7 @@ class SSFTBLSingleThreadTestFixture : public SSFTBLTestFixture {
 protected:
   void SetUp() {
     dbname = "./ssftblsinglethreadtest";
-    unlink((dbname + ".sstbld").c_str());
-    unlink((dbname + ".sstbli").c_str());
+    unlink((dbname + ".sstbl").c_str());
 
     SSFTBLTestFixture::SetUp();
     int r;
@@ -220,8 +215,7 @@ protected:
     r = ssftblclose(ftbl);
     ASSERT_EQ(0, r);
 
-    ASSERT_EQ(0, unlink((dbname + ".sstbld").c_str()));
-    ASSERT_EQ(0, unlink((dbname + ".sstbli").c_str()));
+    ASSERT_EQ(0, unlink((dbname + ".sstbl").c_str()));
 
     SSFTBLTestFixture::TearDown();
   }
