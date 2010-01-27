@@ -21,9 +21,8 @@ typedef struct {
 typedef struct {
   char *path;                  /* path of table file */
   int dfd;                     /* file descriptor for data file */
-  int ifd;                     /* file descriptor for index file */
-  uint64_t blksiz;             /* block size */
-  uint64_t rnum;               /* total number of records */
+  uint32_t blksiz;             /* block size */
+  uint32_t rnum;               /* total number of records */
   pthread_rwlock_t mtx;        /* mutex for record */
   int omode;                   /* open mode */
   int ecode;                   /* error code */
@@ -32,7 +31,8 @@ typedef struct {
   SSFTBLIDXENT lastappended;   /* last appended key info */
   /* reader-only */
   SSFTBLIDXENT *idx;           /* index used for binary-search */
-  uint32_t idxsiz;             /* size of index */
+  uint32_t idxnum;             /* number of index entry */
+  uint64_t idxoff;             /* offset to the index file */
 } SSFTBL;
 
 enum SSFTBLOMODE { /* enumeration for open modes */
