@@ -194,7 +194,7 @@ static int ssftblopenimpl(SSFTBL *tbl, const char *basepath, int oflag) {
   int r, fd;
   char *path;
   SSMALLOC(path, strlen(basepath) + strlen(FTBLFILESUFFIX));
-  sprintf(path, "%s.%s", basepath, FTBLFILESUFFIX);
+  sprintf(path, "%s%s", basepath, FTBLFILESUFFIX);
   SSSYS_NOINTR(fd, open(path, oflag, FTBLFILEMODE));
   if (fd < 0) {
     int ecode = SSEOPEN;
