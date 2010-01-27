@@ -271,6 +271,10 @@ static int ssftblloadheader(SSFTBL *tbl) {
     ssftblsetecode(tbl, SSEREAD);
     return -1;
   }
+  if (memcmp(buf, FTBLMAGICDATA, strlen(FTBLMAGICDATA)) != 0) {
+    ssftblsetecode(tbl, SSEMETA);
+    return -1;
+  }
   memcpy(&tbl->blksiz, buf + FTBLBLKSIZOFF, sizeof(tbl->blksiz));
   memcpy(&tbl->rnum,   buf + FTBLRNUMOFF, sizeof(tbl->rnum));
   memcpy(&tbl->idxnum, buf + FTBLIDXNUM, sizeof(tbl->idxnum));
