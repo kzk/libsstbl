@@ -13,9 +13,10 @@ __SSFTBL_CLINKAGEBEGIN
 #include <ssutil.h>
 
 typedef struct {
-  char *kbuf;    /* key data */
-  int ksiz;      /* key size */
-  uint64_t doff; /* offset in data file */
+  char *kbuf;      /* key data */
+  int ksiz;        /* key size */
+  uint64_t doff;   /* offset in data file */
+  uint32_t blksiz; /* size of block in data file */
 } SSFTBLIDXENT;
 
 typedef struct {
@@ -29,6 +30,7 @@ typedef struct {
   /* writer-only */
   char *blkbuf;                /* block buffer */
   uint32_t blkbufsiz;          /* size of block buffer */
+  uint32_t curblkrnum;         /* number of records in the current block */
   uint32_t curblksiz;          /* counter for splitting into blocks in append */
   SSFTBLIDXENT lastappended;   /* last appended key info */
   /* reader-only */

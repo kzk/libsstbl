@@ -27,7 +27,7 @@ static int ssftbldumpheader(SSFTBL *tbl);
 static int ssftblloadheader(SSFTBL *tbl);
 static int ssftbldumpindex(SSFTBL *tbl);
 static int ssftblloadindex(SSFTBL *tbl);
-static int ssftbldumpcurblk(SSFTBL *tbl, int fd, char *buf, int bufsiz);
+static int ssftbldumpcurblk(SSFTBL *tbl, int fd, char *buf, int bufsiz, int *sp);
 static SSFTBLIDXENT *ssftblindexupperbound(SSFTBL *tbl, const void *kbuf, int ksiz);
 static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kbuf, int ksiz, int *sp);
 static int ssftblkeycmp(const char *s1, size_t n1, const char *s2, size_t n2);
@@ -103,7 +103,16 @@ int ssftblclose(SSFTBL *tbl) {
     if (tbl->omode == SSFTBLOWRITER && tbl->lastappended.kbuf) {
       int err = 0;
       /* write current blkbuf */
-      if (tbl->curblksiz > 0 && ssftbldumpcurblk(tbl, tbl->dfd, tbl->blkbuf, tbl->curblksiz) != 0)
+      int blksiz = 0;
+      uint64_t doff = 0;
+      if (tbl->curblksiz > 0) {
+        assert(tbl->curblkrnum > 0);
+        if (tbl->curblkrnum == 1)
+          doff = (uint64_t)lseek(tbl->dfd, 0, SEEK_END); /* new block */
+        else if (tbl->curblkrnum > 1)
+          doff = tbl->idx[tbl->idxnum-1].doff; /* same with last index block */
+      }
+      if (ssftbldumpcurblk(tbl, tbl->dfd, tbl->blkbuf, tbl->curblksiz, &blksiz) != 0)
         err = -1;
       /* record last entry into tbl->idx */
       SSFTBLIDXENT *e = &tbl->lastappended;
@@ -118,7 +127,8 @@ int ssftblclose(SSFTBL *tbl) {
       SSMALLOC(tbl->idx[tbl->idxnum-1].kbuf, e->ksiz);
       memcpy(tbl->idx[tbl->idxnum-1].kbuf, e->kbuf, e->ksiz);
       tbl->idx[tbl->idxnum-1].ksiz = e->ksiz;
-      tbl->idx[tbl->idxnum-1].doff = e->doff;
+      tbl->idx[tbl->idxnum-1].doff = doff;
+      tbl->idx[tbl->idxnum-1].blksiz = blksiz;
       /* dump header & index */
       if (ssftbldumpheader(tbl) != 0) err = -1;
       if (ssftbldumpindex(tbl) != 0) err = -1;
@@ -133,12 +143,14 @@ int ssftblclose(SSFTBL *tbl) {
     tbl->blkbuf = NULL;
   }
   tbl->blkbufsiz = 0;
+  tbl->curblkrnum = 0;
   tbl->curblksiz = 0;
   if (tbl->lastappended.kbuf) {
     SSFREE(tbl->lastappended.kbuf);
     tbl->lastappended.kbuf = NULL;
     tbl->lastappended.ksiz = 0;
     tbl->lastappended.doff = 0;
+    tbl->lastappended.blksiz = 0;
   }
   if (tbl->idx) {
     for (i = 0; i < tbl->idxnum; i++)
@@ -198,10 +210,12 @@ static void ssftblclear(SSFTBL *tbl) {
   tbl->ecode = SSESUCCESS;
   tbl->blkbuf = NULL;
   tbl->blkbufsiz = 0;
+  tbl->curblkrnum = 0;
   tbl->curblksiz = 0;
   tbl->lastappended.kbuf = NULL;
   tbl->lastappended.ksiz = 0;
   tbl->lastappended.doff = 0;
+  tbl->lastappended.blksiz = 0;
   tbl->idx = NULL;
   tbl->idxnum = 0;
 }
@@ -237,10 +251,11 @@ static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void 
     tbl->idxnum++;
     /* write current blkbuf */
     uint64_t doff = 0;
+    int blksiz = 0;
     if (isfirstappend) {
       doff = lseek(tbl->dfd, 0, SEEK_END);
     } else if (ismovetonext) {
-      if (ssftbldumpcurblk(tbl, tbl->dfd, tbl->blkbuf, tbl->curblksiz) != 0)
+      if (ssftbldumpcurblk(tbl, tbl->dfd, tbl->blkbuf, tbl->curblksiz, &blksiz) != 0)
         return -1;
       doff = lseek(tbl->dfd, 0, SEEK_END);
     }
@@ -250,9 +265,11 @@ static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void 
     memcpy(tbl->idx[tbl->idxnum-1].kbuf, kbuf, ksiz);
     tbl->idx[tbl->idxnum-1].ksiz = ksiz;
     tbl->idx[tbl->idxnum-1].doff = doff;
+    tbl->idx[tbl->idxnum-1].blksiz = blksiz;
     /* move to the next block */
     SSREALLOC(tbl->blkbuf, tbl->blkbuf, tbl->blksiz);
     tbl->blkbufsiz = tbl->blksiz;
+    tbl->curblkrnum = 0;
     tbl->curblksiz = 0;
   }
   /* append to blkbuf */
@@ -270,6 +287,7 @@ static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void 
   p += sizeof(vsiz);
   memcpy(p, vbuf, vsiz);
   /* update lastappended */
+  tbl->curblkrnum++;
   tbl->curblksiz += datasiz;
   SSREALLOC(tbl->lastappended.kbuf, tbl->lastappended.kbuf, ksiz);
   memcpy(tbl->lastappended.kbuf, kbuf, ksiz);
@@ -334,18 +352,20 @@ static int ssftbldumpindex(SSFTBL *tbl) {
   uint32_t i;
   for (i = 0; i < tbl->idxnum; i++) {
     SSFTBLIDXENT *e = tbl->idx + i;
-    if (sswrite(tbl->dfd, &e->ksiz, sizeof(e->ksiz)) != 0) return -1;
-    if (sswrite(tbl->dfd, e->kbuf,  e->ksiz)         != 0) return -1;
-    if (sswrite(tbl->dfd, &e->doff, sizeof(e->doff)) != 0) return -1;
+    if (sswrite(tbl->dfd, &e->ksiz,   sizeof(e->ksiz))   != 0) return -1;
+    if (sswrite(tbl->dfd, e->kbuf,    e->ksiz)           != 0) return -1;
+    if (sswrite(tbl->dfd, &e->doff,   sizeof(e->doff))   != 0) return -1;
+    if (sswrite(tbl->dfd, &e->blksiz, sizeof(e->blksiz)) != 0) return -1;
   }
   return 0;
 }
 
-static int ssftbldumpcurblk(SSFTBL *tbl, int fd, char *buf, int bufsiz) {
+static int ssftbldumpcurblk(SSFTBL *tbl, int fd, char *buf, int bufsiz, int *sp) {
   if (sswrite(fd, buf, bufsiz) != 0) {
     ssftblsetecode(tbl, SSEWRITE);
     return -1;
   }
+  *sp = bufsiz;
   return 0;
 }
 
@@ -359,10 +379,11 @@ static int ssftblloadindex(SSFTBL *tbl) {
   uint32_t i;
   for (i = 0; i < tbl->idxnum; i++) {
     SSFTBLIDXENT *e = tbl->idx + i;
-    if (ssread(tbl->dfd, &e->ksiz, sizeof(e->ksiz)) != 0) return -1;
+    if (ssread(tbl->dfd, &e->ksiz,   sizeof(e->ksiz))   != 0) return -1;
     SSMALLOC(e->kbuf, e->ksiz);
-    if (ssread(tbl->dfd, e->kbuf,  e->ksiz)         != 0) return -1;
-    if (ssread(tbl->dfd, &e->doff, sizeof(e->doff)) != 0) return -1;
+    if (ssread(tbl->dfd, e->kbuf,    e->ksiz)           != 0) return -1;
+    if (ssread(tbl->dfd, &e->doff,   sizeof(e->doff))   != 0) return -1;
+    if (ssread(tbl->dfd, &e->blksiz, sizeof(e->blksiz)) != 0) return -1;
   }
   return 0;
 }
