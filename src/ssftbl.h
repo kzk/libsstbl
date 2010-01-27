@@ -27,7 +27,9 @@ typedef struct {
   int omode;                   /* open mode */
   int ecode;                   /* error code */
   /* writer-only */
-  uint64_t curblksiz;          /* counter for splitting into blocks in append */
+  char *blkbuf;                /* block buffer */
+  uint32_t blkbufsiz;          /* size of block buffer */
+  uint32_t curblksiz;          /* counter for splitting into blocks in append */
   SSFTBLIDXENT lastappended;   /* last appended key info */
   /* reader-only */
   SSFTBLIDXENT *idx;           /* index used for binary-search */

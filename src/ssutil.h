@@ -14,6 +14,7 @@ __SSUTIL_CLINKAGEBEGIN
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
 #include <errno.h>
 

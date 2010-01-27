@@ -27,6 +27,7 @@ static int ssftbldumpheader(SSFTBL *tbl);
 static int ssftblloadheader(SSFTBL *tbl);
 static int ssftbldumpindex(SSFTBL *tbl);
 static int ssftblloadindex(SSFTBL *tbl);
+static int ssftbldumpcurblk(SSFTBL *tbl, int fd, char *buf, int bufsiz);
 static SSFTBLIDXENT *ssftblindexupperbound(SSFTBL *tbl, const void *kbuf, int ksiz);
 static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kbuf, int ksiz, int *sp);
 static int ssftblkeycmp(const char *s1, size_t n1, const char *s2, size_t n2);
@@ -100,12 +101,16 @@ int ssftblclose(SSFTBL *tbl) {
   }
   if (tbl->dfd >= 0) {
     if (tbl->omode == SSFTBLOWRITER && tbl->lastappended.kbuf) {
+      int err = 0;
+      /* write current blkbuf */
+      if (tbl->curblksiz > 0 && ssftbldumpcurblk(tbl, tbl->dfd, tbl->blkbuf, tbl->curblksiz) != 0)
+        err = -1;
       /* record last entry into tbl->idx */
       SSFTBLIDXENT *e = &tbl->lastappended;
       off_t idxoff = lseek(tbl->dfd, 0, SEEK_END);
       if (idxoff == -1) {
         ssftblsetecode(tbl, SSESEEK);
-        r = -1;
+        err = -1;
       }
       tbl->idxoff = (uint64_t)idxoff;
       tbl->idxnum++;
@@ -115,14 +120,19 @@ int ssftblclose(SSFTBL *tbl) {
       tbl->idx[tbl->idxnum-1].ksiz = e->ksiz;
       tbl->idx[tbl->idxnum-1].doff = e->doff;
       /* dump header & index */
-      /* TODO: fix error path */
-      if (r == 0) ssftbldumpheader(tbl);
-      if (r == 0) ssftbldumpindex(tbl);
+      if (ssftbldumpheader(tbl) != 0) err = -1;
+      if (ssftbldumpindex(tbl) != 0) err = -1;
+      r = err;
     }
     SSSYS_NOINTR(r, fsync(tbl->dfd));
     SSSYS_NOINTR(r, close(tbl->dfd));
     tbl->dfd = -1;
   }
+  if (tbl->blkbuf) {
+    SSFREE(tbl->blkbuf);
+    tbl->blkbuf = NULL;
+  }
+  tbl->blkbufsiz = 0;
   tbl->curblksiz = 0;
   if (tbl->lastappended.kbuf) {
     SSFREE(tbl->lastappended.kbuf);
@@ -182,6 +192,8 @@ static void ssftblclear(SSFTBL *tbl) {
   tbl->rnum = 0;
   tbl->omode = 0;
   tbl->ecode = SSESUCCESS;
+  tbl->blkbuf = NULL;
+  tbl->blkbufsiz = 0;
   tbl->curblksiz = 0;
   tbl->lastappended.kbuf = NULL;
   tbl->lastappended.ksiz = 0;
@@ -214,8 +226,11 @@ err:
 }
 
 static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz) {
+  assert(tbl->blksiz > 0);
   uint64_t doff = lseek(tbl->dfd, 0, SEEK_END);
-  if (tbl->lastappended.kbuf == NULL || tbl->curblksiz >= tbl->blksiz) {
+  int isfirstappend = (tbl->lastappended.kbuf == NULL);
+  int ismovetonext = (tbl->curblksiz >= tbl->blksiz);
+  if (isfirstappend || ismovetonext) {
     tbl->idxnum++;
     /* record the index entry */
     SSREALLOC(tbl->idx, tbl->idx, sizeof(SSFTBLIDXENT) * tbl->idxnum);
@@ -223,23 +238,35 @@ static int ssftblappendimpl(SSFTBL *tbl, const void *kbuf, int ksiz, const void 
     memcpy(tbl->idx[tbl->idxnum-1].kbuf, kbuf, ksiz);
     tbl->idx[tbl->idxnum-1].ksiz = ksiz;
     tbl->idx[tbl->idxnum-1].doff = doff;
+    /* write current blkbuf */
+    if (ismovetonext && ssftbldumpcurblk(tbl, tbl->dfd, tbl->blkbuf, tbl->curblksiz) != 0)
+      return -1;
     /* move to the next block */
+    SSREALLOC(tbl->blkbuf, tbl->blkbuf, tbl->blksiz);
+    tbl->blkbufsiz = tbl->blksiz;
     tbl->curblksiz = 0;
   }
-  if (sswrite(tbl->dfd, &ksiz, sizeof(ksiz)) != 0) goto err;
-  if (sswrite(tbl->dfd, kbuf, ksiz) != 0) goto err;
-  if (sswrite(tbl->dfd, &vsiz, sizeof(vsiz)) != 0) goto err;
-  if (sswrite(tbl->dfd, vbuf, vsiz) != 0) goto err;
-  tbl->curblksiz += vsiz;
-  assert(tbl->blksiz > 0);
+  /* append to blkbuf */
+  uint32_t datasiz = sizeof(ksiz) + ksiz + sizeof(vsiz) + vsiz;
+  if (tbl->blkbufsiz < tbl->curblksiz + datasiz) {
+    SSREALLOC(tbl->blkbuf, tbl->blkbuf, tbl->curblksiz + datasiz);
+    tbl->blkbufsiz = tbl->curblksiz + datasiz;
+  }
+  char *p = tbl->blkbuf + tbl->curblksiz;
+  memcpy(p, &ksiz, sizeof(ksiz));
+  p += sizeof(ksiz);
+  memcpy(p, kbuf, ksiz);
+  p += ksiz;
+  memcpy(p, &vsiz, sizeof(vsiz));
+  p += sizeof(vsiz);
+  memcpy(p, vbuf, vsiz);
+  /* update lastappended */
+  tbl->curblksiz += datasiz;
   SSREALLOC(tbl->lastappended.kbuf, tbl->lastappended.kbuf, ksiz);
   memcpy(tbl->lastappended.kbuf, kbuf, ksiz);
   tbl->lastappended.ksiz = ksiz;
   tbl->lastappended.doff = doff;
   return 0;
-err:
-  ssftblsetecode(tbl, SSEWRITE);
-  return -1;
 }
 
 static int ssftbldumpheader(SSFTBL *tbl) {
@@ -302,6 +329,14 @@ static int ssftbldumpindex(SSFTBL *tbl) {
     if (sswrite(tbl->dfd, &e->ksiz, sizeof(e->ksiz)) != 0) return -1;
     if (sswrite(tbl->dfd, e->kbuf,  e->ksiz)         != 0) return -1;
     if (sswrite(tbl->dfd, &e->doff, sizeof(e->doff)) != 0) return -1;
+  }
+  return 0;
+}
+
+static int ssftbldumpcurblk(SSFTBL *tbl, int fd, char *buf, int bufsiz) {
+  if (sswrite(fd, buf, bufsiz) != 0) {
+    ssftblsetecode(tbl, SSEWRITE);
+    return -1;
   }
   return 0;
 }
