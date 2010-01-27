@@ -11,7 +11,10 @@
 __SSUTIL_CLINKAGEBEGIN
 
 #include <assert.h>
+#include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
+#include <pthread.h>
 #include <errno.h>
 
 /* error codes */

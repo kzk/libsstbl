@@ -10,8 +10,7 @@
 #endif
 __SSFTBL_CLINKAGEBEGIN
 
-#include <pthread.h>
-#include <tcutil.h>
+#include <ssutil.h>
 
 typedef struct {
   char *kbuf;    /* key data */
