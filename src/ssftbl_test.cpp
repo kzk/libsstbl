@@ -195,7 +195,7 @@ protected:
         i--;
         continue;
       }
-      string val = get_random_str(1024 * 1, 1024 * 40);
+      string val = get_random_str(1024 * 1, 1024 * 120);
       m[key] = val;
     }
     for (map<string, string>::const_iterator it = m.begin(); it != m.end(); ++it) {
