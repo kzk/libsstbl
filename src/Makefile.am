@@ -8,7 +8,7 @@ libsstbl_la_SOURCES = \
   compress.h compress.c
 
 libsstbl_la_LIBADD = \
-  -lpthread -lm -ltokyocabinet
+  -lpthread -lm -ltokyocabinet -llzo
 
 check_PROGRAMS = \
   ssftbl_test ssmtbl_test
