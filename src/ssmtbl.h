@@ -1,14 +1,14 @@
-#ifndef _SSMTBL_H
-#define _SSMTBL_H
+#ifndef SSMTBL_H_
+#define SSMTBL_H_
 
 #if defined(__cplusplus)
-#define __SSMTBL_CLINKAGEBEGIN extern "C" {
-#define __SSMTBL_CLINKAGEEND }
+#define SSMTBL_CLINKAGEBEGIN extern "C" {
+#define SSMTBL_CLINKAGEEND }
 #else
-#define __SSMTBL_CLINKAGEBEGIN
-#define __SSMTBL_CLINKAGEEND
+#define SSMTBL_CLINKAGEBEGIN
+#define SSMTBL_CLINKAGEEND
 #endif
-__SSMTBL_CLINKAGEBEGIN
+SSMTBL_CLINKAGEBEGIN
 
 #include <stdint.h>
 #include <pthread.h>
@@ -63,5 +63,5 @@ int ssmtblput(SSMTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsi
    it is no longer in use. */
 void *ssmtblget(SSMTBL *tbl, const void *kbuf, int ksiz, int *sp);
 
-__SSMTBL_CLINKAGEEND
+SSMTBL_CLINKAGEEND
 #endif
