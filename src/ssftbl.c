@@ -440,39 +440,31 @@ static SSFTBLIDXENT *ssftblindexupperbound(SSFTBL *tbl, const void *kbuf, int ks
 
 static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kb, int ks, int *sp) {
   assert(e && kb && ks);
-  int iscachehit = 0;
   int bufsiz = 0;
-  char *buf;
-  buf = tcmdbget(tbl->blkc, &e->doff, sizeof(e->doff), &bufsiz);
-  if (buf != 0) {
-    iscachehit = 1;
-  } else {
-    buf = ssftblloadblk(tbl, tbl->dfd, e->doff, e->blksiz, &bufsiz);
-  }
+  char *buf = tcmdbget(tbl->blkc, &e->doff, sizeof(e->doff), &bufsiz);
+  int iscachehit = (buf != NULL) ? 1 : 0;
+  if (buf == NULL)
+    buf = ssftblloadblk(tbl, tbl->dfd, e->doff, e->blksiz, &bufsiz); /* block cache miss */
   if (buf == NULL || bufsiz <= 0)
     return NULL;
   int curpos = 0;
-  int ksiz; char *kbuf = NULL; int vsiz; char *vbuf = NULL;
   while (curpos < bufsiz) {
-    memcpy(&ksiz, buf + curpos, sizeof(ksiz));
+    int ksiz = *((int*)(buf + curpos));
     curpos += sizeof(ksiz);
-    SSREALLOC(kbuf, kbuf, ksiz);
-    memcpy(kbuf, buf + curpos, ksiz);
+    char *kbuf = buf + curpos;
     curpos += ksiz;
-    memcpy(&vsiz, buf + curpos, sizeof(vsiz));
+    int vsiz = *((int*)(buf + curpos));
     curpos += sizeof(vsiz);
-    SSREALLOC(vbuf, vbuf, vsiz);
-    memcpy(vbuf, buf + curpos, vsiz);
+    char *vbuf = buf + curpos;
     curpos += vsiz;
     if (FTKEYCMPEQUAL(kbuf, ksiz, kb, ks)) {
       if (sp) *sp = vsiz;
-      SSFREE(kbuf);
-      SSFREE(buf);
-      return vbuf;
+      char *ret = NULL;
+      SSMALLOC(ret, vsiz);
+      memcpy(ret, vbuf, vsiz);
+      return ret;
     }
   }
-  if (kbuf) SSFREE(kbuf);
-  if (vbuf) SSFREE(vbuf);
   if (!iscachehit)
     tcmdbput3(tbl->blkc, &e->doff, sizeof(e->doff), buf, bufsiz);
   if (tcmdbrnum(tbl->blkc) >= tbl->blkcnum)
