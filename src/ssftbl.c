@@ -442,9 +442,13 @@ static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kb, int k
   assert(e && kb && ks);
   int bufsiz = 0;
   char *buf = tcmdbget(tbl->blkc, &e->doff, sizeof(e->doff), &bufsiz);
-  int iscachehit = (buf != NULL) ? 1 : 0;
-  if (buf == NULL)
+  if (buf == NULL) {
     buf = ssftblloadblk(tbl, tbl->dfd, e->doff, e->blksiz, &bufsiz); /* block cache miss */
+    if (buf == NULL) return NULL;
+    tcmdbput3(tbl->blkc, &e->doff, sizeof(e->doff), buf, bufsiz);
+    if (tcmdbrnum(tbl->blkc) >= tbl->blkcnum)
+      tcmdbcutfront(tbl->blkc, FTBLBLKCOUT);
+  }
   if (buf == NULL || bufsiz <= 0)
     return NULL;
   int curpos = 0;
@@ -465,10 +469,6 @@ static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kb, int k
       return ret;
     }
   }
-  if (!iscachehit)
-    tcmdbput3(tbl->blkc, &e->doff, sizeof(e->doff), buf, bufsiz);
-  if (tcmdbrnum(tbl->blkc) >= tbl->blkcnum)
-    tcmdbcutfront(tbl->blkc, FTBLBLKCOUT);
   SSFREE(buf);
   return NULL;
 }
