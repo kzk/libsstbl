@@ -1,6 +1,8 @@
 #include <ssutil.h>
 #include <ssftbl.h>
 
+#include <tcutil.h> /* for tcmdb */
+
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -15,9 +17,11 @@
 #define FTBLIDXOFF    48                /* index info offset */
 
 /* const or default parameters */
-#define FTBLFILEMODE    00644           /* permission of created files */
+#define FTBLFILEMODE   00644            /* permission of created files */
 #define FTBLFILESUFFIX ".sstbl"         /* suffix of data file */
 #define DEFBLKSIZ      (64 * 1024)      /* default data block size */
+#define DEFBLKCNUM     (4 * 1024)       /* default cache entry num */
+#define FTBLBLKCOUT    256
 
 /* private function prototypes */
 static void ssftblclear(SSFTBL *tbl);
@@ -62,6 +66,12 @@ int ssftbltune(SSFTBL *tbl, uint64_t blksiz) {
   return 0;
 }
 
+int ssftblsetcache(SSFTBL *tbl, uint32_t blkcnum) {
+  assert(tbl);
+  tbl->blkcnum = (blkcnum > 0) ? blkcnum : 1;
+  return 0;
+}
+
 int ssftblopen(SSFTBL *tbl, const char *path, enum SSFTBLOMODE omode) {
   if (tbl->dfd >= 0) {
     ssftblsetecode(tbl, SSEINVALID);
@@ -81,6 +91,7 @@ int ssftblopen(SSFTBL *tbl, const char *path, enum SSFTBLOMODE omode) {
     if (ssftblloadindex(tbl) != 0) return -1;
     tbl->omode = SSFTBLOREADER;
     tbl->path = strdup(path);
+    tbl->blkc = tcmdbnew2(tbl->blkcnum * 2 + 1);
     break;
   default:
     r = -1;
@@ -162,6 +173,10 @@ int ssftblclose(SSFTBL *tbl) {
     tbl->idx = NULL;
     tbl->idxnum = 0;
   }
+  if (tbl->blkc) {
+    tcmdbdel(tbl->blkc);
+    tbl->blkc = NULL;
+  }
   return r;
 }
 
@@ -217,6 +232,9 @@ static void ssftblclear(SSFTBL *tbl) {
   tbl->lastappended.blksiz = 0;
   tbl->idx = NULL;
   tbl->idxnum = 0;
+  tbl->idxoff = 0;
+  tbl->blkc = NULL;
+  tbl->blkcnum = DEFBLKCNUM;
 }
 
 static int ssftblopenimpl(SSFTBL *tbl, const char *basepath, int oflag) {
@@ -422,8 +440,15 @@ static SSFTBLIDXENT *ssftblindexupperbound(SSFTBL *tbl, const void *kbuf, int ks
 
 static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kb, int ks, int *sp) {
   assert(e && kb && ks);
+  int iscachehit = 0;
   int bufsiz = 0;
-  char *buf = ssftblloadblk(tbl, tbl->dfd, e->doff, e->blksiz, &bufsiz);
+  char *buf;
+  buf = tcmdbget(tbl->blkc, &e->doff, sizeof(e->doff), &bufsiz);
+  if (buf != 0) {
+    iscachehit = 1;
+  } else {
+    buf = ssftblloadblk(tbl, tbl->dfd, e->doff, e->blksiz, &bufsiz);
+  }
   if (buf == NULL || bufsiz <= 0)
     return NULL;
   int curpos = 0;
@@ -448,6 +473,10 @@ static void *ssftblgetbyscan(SSFTBL *tbl, SSFTBLIDXENT *e, const void *kb, int k
   }
   if (kbuf) SSFREE(kbuf);
   if (vbuf) SSFREE(vbuf);
+  if (!iscachehit)
+    tcmdbput3(tbl->blkc, &e->doff, sizeof(e->doff), buf, bufsiz);
+  if (tcmdbrnum(tbl->blkc) >= tbl->blkcnum)
+    tcmdbcutfront(tbl->blkc, FTBLBLKCOUT);
   SSFREE(buf);
   return NULL;
 }

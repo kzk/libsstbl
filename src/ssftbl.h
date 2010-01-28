@@ -37,6 +37,8 @@ typedef struct {
   SSFTBLIDXENT *idx;           /* index used for binary-search */
   uint32_t idxnum;             /* number of index entry */
   uint64_t idxoff;             /* offset to the index file */
+  void *blkc;                  /* lru cache of block */
+  uint32_t blkcnum;            /* number of blocks to be cached */
 } SSFTBL;
 
 enum SSFTBLOMODE { /* enumeration for open modes */
@@ -47,6 +49,7 @@ enum SSFTBLOMODE { /* enumeration for open modes */
 SSFTBL *ssftblnew(void);
 void ssftbldel(SSFTBL *tbl);
 int ssftbltune(SSFTBL *tbl, uint64_t blksiz);
+int ssftblsetcache(SSFTBL *tbl, uint32_t blkcnum);
 
 int ssftblopen(SSFTBL *tbl, const char *path, enum SSFTBLOMODE omode);
 int ssftblclose(SSFTBL *tbl);
