@@ -1,14 +1,14 @@
-#ifndef _SSBF_H
-#define _SSBF_H
+#ifndef SSBF_H_
+#define SSBF_H_
 
 #if defined(__cplusplus)
-#define __SSBF_CLINKAGEBEGIN extern "C" {
-#define __SSBF_CLINKAGEEND }
+#define SSBF_CLINKAGEBEGIN extern "C" {
+#define SSBF_CLINKAGEEND }
 #else 
-#define __SSBF_CLINKAGEBEGIN
-#define __SSBF_CLINKAGEEND
+#define SSBF_CLINKAGEBEGIN
+#define SSBF_CLINKAGEEND
 #endif
-__SSBF_CLINKAGEBEGIN
+SSBF_CLINKAGEBEGIN
 
 #include <limits.h>
 #include <stdint.h>
@@ -73,5 +73,5 @@ int ssbfadd(SSBF *bf, const void *buf, int siz);
    0 if the value is not contained in the filter (100% confidence), -1 if error occurred. */
 int ssbfhas(SSBF *bf, const void *buf, int siz);
 
-__SSBF_CLINKAGEEND
+SSBF_CLINKAGEEND
 #endif
