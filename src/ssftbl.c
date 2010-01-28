@@ -189,12 +189,8 @@ void *ssftblget(SSFTBL *tbl, const void *kbuf, int ksiz, int *sp) {
   assert(first <= ubound && ubound <= last);
   if (ubound == first)
     return NULL;
-  if (ubound == last) {
-    if (FTKEYCMPGREATER(kbuf, ksiz, (last-1)->kbuf, (last-1)->ksiz))
-      return NULL;
-    if (FTKEYCMPEQUAL(kbuf, ksiz, (last-1)->kbuf, (last-1)->ksiz))
-      ubound--;
-  }
+  if (ubound == last && FTKEYCMPGREATER(kbuf, ksiz, (last-1)->kbuf, (last-1)->ksiz))
+    return NULL;
   SSFTBLIDXENT *e = ubound - 1;
   assert(first <= e && e < last);
   return ssftblgetbyscan(tbl, e, kbuf, ksiz, sp);
