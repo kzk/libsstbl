@@ -241,3 +241,20 @@ TEST_F(SSFTBLSingleThreadTestFixture, get_many) {
     free(p);
   }
 }
+
+TEST_F(SSFTBLSingleThreadTestFixture, get_many_include_not_found) {
+  for (unsigned int i = 0; i < 1024; i++) {
+    int sp;
+    string key = get_random_str(10, 20);
+    bool has = (m.find(key) != m.end());
+    void *p = ssftblget(ftbl, key.c_str(), key.size(), &sp);
+    if (has) {
+      if (p == NULL)
+        cerr << "errkey:" << key << endl;
+      ASSERT_TRUE(p != NULL);
+      free(p);
+    } else {
+      ASSERT_TRUE(p == NULL);
+    }
+  }
+}
