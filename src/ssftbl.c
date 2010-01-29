@@ -137,15 +137,16 @@ int ssftblclose(SSFTBL *tbl) {
       tbl->idx[tbl->idxnum-1].ksiz = e->ksiz;
       tbl->idx[tbl->idxnum-1].doff = doff;
       tbl->idx[tbl->idxnum-1].blksiz = blksiz;
-      /* dump header */
-      if (ssftbldumpheader(tbl) != 0) err = -1;
-      /* dump index */
+      /* get index information index */
       off_t idxoff = lseek(tbl->dfd, 0, SEEK_END);
       if (idxoff == -1) {
         ssftblsetecode(tbl, SSESEEK);
         err = -1;
       }
       tbl->idxoff = (uint64_t)idxoff;
+      /* dump header */
+      if (ssftbldumpheader(tbl) != 0) err = -1;
+      /* dump index */
       if (ssftbldumpindex(tbl) != 0) err = -1;
       r = err;
     }
@@ -437,13 +438,16 @@ static int ssftblloadindex(SSFTBL *tbl) {
   uint32_t i;
   for (i = 0; i < tbl->idxnum; i++) {
     SSFTBLIDXENT *e = tbl->idx + i;
-    if (ssread(tbl->dfd, &e->ksiz,   sizeof(e->ksiz))   != 0) return -1;
+    if (ssread(tbl->dfd, &e->ksiz,   sizeof(e->ksiz))   != 0) goto err;
     SSMALLOC(e->kbuf, e->ksiz);
-    if (ssread(tbl->dfd, e->kbuf,    e->ksiz)           != 0) return -1;
-    if (ssread(tbl->dfd, &e->doff,   sizeof(e->doff))   != 0) return -1;
-    if (ssread(tbl->dfd, &e->blksiz, sizeof(e->blksiz)) != 0) return -1;
+    if (ssread(tbl->dfd, e->kbuf,    e->ksiz)           != 0) goto err;
+    if (ssread(tbl->dfd, &e->doff,   sizeof(e->doff))   != 0) goto err;
+    if (ssread(tbl->dfd, &e->blksiz, sizeof(e->blksiz)) != 0) goto err;
   }
   return 0;
+err:
+  ssftblsetecode(tbl, SSEREAD);
+  return -1;
 }
 
 static SSFTBLIDXENT *ssftblindexupperbound(SSFTBL *tbl, const void *kbuf, int ksiz) {
