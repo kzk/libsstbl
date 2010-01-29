@@ -56,6 +56,9 @@ int ssftblclose(SSFTBL *tbl);
 
 int ssftblappend(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz);
 void *ssftblget(SSFTBL *tbl, const void *kbuf, int ksiz, int *sp);
+
+void *ssftblgetfirstkey(SSFTBL *tbl, int *sp);
+void *ssftblgetlastkey(SSFTBL *tbl, int *sp);
                      
 SSFTBL_CLINKAGEEND
 #endif

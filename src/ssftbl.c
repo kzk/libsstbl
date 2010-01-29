@@ -212,6 +212,34 @@ void *ssftblget(SSFTBL *tbl, const void *kbuf, int ksiz, int *sp) {
   return ssftblgetbyscan(tbl, e, kbuf, ksiz, sp);
 }
 
+void *ssftblgetfirstkey(SSFTBL *tbl, int *sp) {
+  assert(tbl && sp);
+  if (tbl->dfd < 0 || tbl->omode != SSFTBLOREADER) {
+    ssftblsetecode(tbl, SSEINVALID);
+    return NULL;
+  }
+  char *ret;
+  SSFTBLIDXENT *e = tbl->idx + 0;
+  SSMALLOC(ret, e->ksiz);
+  memcpy(ret, e->kbuf, e->ksiz);
+  *sp = e->ksiz;
+  return ret;
+}
+
+void *ssftblgetlastkey(SSFTBL *tbl, int *sp) {
+  if (tbl->dfd < 0 || tbl->omode != SSFTBLOREADER) {
+    ssftblsetecode(tbl, SSEINVALID);
+    return NULL;
+  }
+  assert(tbl->idxnum >= 2);
+  char *ret;
+  SSFTBLIDXENT *e = tbl->idx + tbl->idxnum - 1;
+  SSMALLOC(ret, e->ksiz);
+  memcpy(ret, e->kbuf, e->ksiz);
+  *sp = e->ksiz;
+  return ret;
+}
+
 /*-----------------------------------------------------------------------------
  * private functions
  */
