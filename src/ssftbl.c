@@ -130,12 +130,6 @@ int ssftblclose(SSFTBL *tbl) {
         err = -1;
       /* record last entry into tbl->idx */
       SSFTBLIDXENT *e = &tbl->lastappended;
-      off_t idxoff = lseek(tbl->dfd, 0, SEEK_END);
-      if (idxoff == -1) {
-        ssftblsetecode(tbl, SSESEEK);
-        err = -1;
-      }
-      tbl->idxoff = (uint64_t)idxoff;
       tbl->idxnum++;
       SSREALLOC(tbl->idx, tbl->idx, sizeof(SSFTBLIDXENT) * tbl->idxnum);
       SSMALLOC(tbl->idx[tbl->idxnum-1].kbuf, e->ksiz);
@@ -143,8 +137,15 @@ int ssftblclose(SSFTBL *tbl) {
       tbl->idx[tbl->idxnum-1].ksiz = e->ksiz;
       tbl->idx[tbl->idxnum-1].doff = doff;
       tbl->idx[tbl->idxnum-1].blksiz = blksiz;
-      /* dump header & index */
+      /* dump header */
       if (ssftbldumpheader(tbl) != 0) err = -1;
+      /* dump index */
+      off_t idxoff = lseek(tbl->dfd, 0, SEEK_END);
+      if (idxoff == -1) {
+        ssftblsetecode(tbl, SSESEEK);
+        err = -1;
+      }
+      tbl->idxoff = (uint64_t)idxoff;
       if (ssftbldumpindex(tbl) != 0) err = -1;
       r = err;
     }
