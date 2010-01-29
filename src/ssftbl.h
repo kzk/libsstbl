@@ -1,14 +1,14 @@
-#ifndef _SSFTBL_H
-#define _SSFTBL_H
+#ifndef SSFTBL_H_
+#define SSFTBL_H_
 
 #if defined(__cplusplus)
-#define __SSFTBL_CLINKAGEBEGIN extern "C" {
-#define __SSFTBL_CLINKAGEEND }
+#define SSFTBL_CLINKAGEBEGIN extern "C" {
+#define SSFTBL_CLINKAGEEND }
 #else
-#define __SSFTBL_CLINKAGEBEGIN
-#define __SSFTBL_CLINKAGEEND
+#define SSFTBL_CLINKAGEBEGIN
+#define SSFTBL_CLINKAGEEND
 #endif
-__SSFTBL_CLINKAGEBEGIN
+SSFTBL_CLINKAGEBEGIN
 
 #include <ssutil.h>
 
@@ -57,5 +57,5 @@ int ssftblclose(SSFTBL *tbl);
 int ssftblappend(SSFTBL *tbl, const void *kbuf, int ksiz, const void *vbuf, int vsiz);
 void *ssftblget(SSFTBL *tbl, const void *kbuf, int ksiz, int *sp);
                      
-__SSFTBL_CLINKAGEEND
+SSFTBL_CLINKAGEEND
 #endif
