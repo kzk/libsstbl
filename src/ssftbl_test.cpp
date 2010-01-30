@@ -121,7 +121,8 @@ protected:
 
     SSFTBLTestFixture::SetUp();
     int r;
-    r = ssftbltune(ftbl, 64 * 1024);
+    int cmode = SSFTBLCMETHOD;
+    r = ssftbltune(ftbl, 64 * 1024, cmode);
     ASSERT_EQ(0, r);
 
     r = ssftblopen(ftbl, dbname.c_str(), SSFTBLOWRITER);
@@ -213,7 +214,7 @@ public:
         i--;
         continue;
       }
-      string val = get_random_str(1024 * 1, 1024 * 120);
+      string val = get_random_str(1024 * 1, 1024 * 2);
       m[key] = val;
     }
     for (map<string, string>::const_iterator it = m.begin(); it != m.end(); ++it) {
@@ -246,6 +247,68 @@ TEST_F(SSFTBLRandomReaderTestFixture, get_many) {
 }
 
 TEST_F(SSFTBLRandomReaderTestFixture, get_many_include_not_found) {
+  for (unsigned int i = 0; i < 10240; i++) {
+    int sp;
+    string key = get_random_str(10, 20);
+    bool has = (m.find(key) != m.end());
+    void *p = ssftblget(ftbl, key.c_str(), key.size(), &sp);
+    if (has) {
+      if (p == NULL)
+        cerr << "errkey:" << key << endl;
+      ASSERT_TRUE(p != NULL);
+      free(p);
+    } else {
+      ASSERT_TRUE(p == NULL);
+    }
+  }
+}
+
+/*-----------------------------------------------------------------------------
+ * SmallBlockReader
+ */
+class SSFTBLSmallBlockReaderTestFixture : public SSFTBLBaseReaderTestFixture {
+public:
+  virtual void Appends(SSFTBL *ftbl) {
+    int r;
+    for (int i = 0; i < 100; i++) {
+      string key = get_random_str(10, 20);
+      if (m.find(key) != m.end()) {
+        i--;
+        continue;
+      }
+      string val = get_random_str(1024 * 1, 1024 * 2);
+      m[key] = val;
+    }
+    for (map<string, string>::const_iterator it = m.begin(); it != m.end(); ++it) {
+      const string &key = it->first;
+      const string &val = it->second;
+      r = ssftblappend(ftbl, key.c_str(), key.size(), val.c_str(), val.size());
+      ASSERT_EQ(0, r);
+    }
+  }
+  map<string, string> m;
+};
+
+TEST_F(SSFTBLSmallBlockReaderTestFixture, open_close) {
+  // nothing
+  ;
+}
+
+TEST_F(SSFTBLSmallBlockReaderTestFixture, get_many) {
+  for (map<string, string>::const_iterator it = m.begin(); it != m.end(); ++it) {
+    int sp;
+    const string &key = it->first;
+    const string &val = it->second;
+    void *p = ssftblget(ftbl, key.c_str(), key.size(), &sp);
+    if (p == NULL)
+      cerr << "errkey:" << key << endl;
+    ASSERT_TRUE(p != NULL);
+    ASSERT_EQ(val, string((const char*)p, sp));
+    free(p);
+  }
+}
+
+TEST_F(SSFTBLSmallBlockReaderTestFixture, get_many_include_not_found) {
   for (unsigned int i = 0; i < 10240; i++) {
     int sp;
     string key = get_random_str(10, 20);
