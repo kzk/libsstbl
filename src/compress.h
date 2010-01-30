@@ -16,6 +16,15 @@ __SSCOMPRESS_CLINKAGEBEGIN
 #define HAVE_ZLIB 1
 #define HAVE_LZO  0 /* disabled */
 
+enum SSCMETHOD {
+  SSCMNONE, /* no compression */
+  SSCMZLIB, /* zlib compression */
+};
+typedef char *(*compressfunc)(const char *ptr, int size, int *sp);
+typedef char *(*decompressfunc)(const char *ptr, int size, int *sp);
+compressfunc getcompressfunc(int cmethod);
+decompressfunc getdecompressfunc(int cmethod);
+
 /* none */
 char *sscodec_nonecompress(const char *ptr, int size, int *sp);
 char *sscodec_nonedecompress(const char *ptr, int size, int *sp);

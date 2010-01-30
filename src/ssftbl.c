@@ -1,4 +1,5 @@
 #include <ssutil.h>
+#include <compress.h>
 #include <ssftbl.h>
 
 #include <tcutil.h> /* for tcmdb */
@@ -250,6 +251,7 @@ static void ssftblclear(SSFTBL *tbl) {
   tbl->dfd = -1;
   tbl->blksiz = DEFBLKSIZ;
   tbl->rnum = 0;
+  tbl->cmethod = SSCMZLIB;
   tbl->omode = 0;
   tbl->ecode = SSESUCCESS;
   tbl->blkbuf = NULL;
@@ -408,11 +410,17 @@ static int ssftbldumpindex(SSFTBL *tbl) {
 }
 
 static int ssftbldumpblk(SSFTBL *tbl, int fd, char *buf, int bufsiz, int *sp) {
-  if (sswrite(fd, buf, bufsiz) != 0) {
+  compressfunc func = getcompressfunc(tbl->cmethod);
+  int cbufsiz = 0;
+  char *cbuf = func(buf, bufsiz, &cbufsiz);
+  assert(cbuf && cbufsiz > 0);
+  if (sswrite(fd, cbuf, cbufsiz) != 0) {
     ssftblsetecode(tbl, SSEWRITE);
+    SSFREE(cbuf);
     return -1;
   }
-  *sp = bufsiz;
+  SSFREE(cbuf);
+  *sp = cbufsiz;
   return 0;
 }
 
@@ -424,8 +432,12 @@ static char *ssftblloadblk(SSFTBL *tbl, int fd, uint64_t doff, int blksiz, int *
     ssftblsetecode(tbl, SSEREAD);
     return NULL;
   }
-  *sp = blksiz;
-  return buf;
+  decompressfunc func = getdecompressfunc(tbl->cmethod);
+  int dbufsiz = 0;
+  char *dbuf = func(buf, blksiz, &dbufsiz);
+  assert(dbuf && dbufsiz > 0);
+  *sp = dbufsiz;
+  return dbuf;
 }
 
 static int ssftblloadindex(SSFTBL *tbl) {

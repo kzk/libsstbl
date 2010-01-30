@@ -12,6 +12,11 @@ SSFTBL_CLINKAGEBEGIN
 
 #include <ssutil.h>
 
+enum SSFTBLOMODE { /* enumeration for open modes */
+  SSFTBLOREADER = 1 << 0, /* open as a reader */
+  SSFTBLOWRITER = 1 << 1  /* open as a writer */
+};
+
 typedef struct {
   char *kbuf;      /* key data */
   int ksiz;        /* key size */
@@ -25,6 +30,7 @@ typedef struct {
   uint32_t blksiz;             /* block size */
   uint32_t rnum;               /* total number of records */
   pthread_rwlock_t mtx;        /* mutex for record */
+  int cmethod;                 /* compression method */
   int omode;                   /* open mode */
   int ecode;                   /* error code */
   /* writer-only */
@@ -40,11 +46,6 @@ typedef struct {
   void *blkc;                  /* lru cache of block */
   uint32_t blkcnum;            /* number of blocks to be cached */
 } SSFTBL;
-
-enum SSFTBLOMODE { /* enumeration for open modes */
-  SSFTBLOREADER = 1 << 0, /* open as a reader */
-  SSFTBLOWRITER = 1 << 1  /* open as a writer */
-};
 
 SSFTBL *ssftblnew(void);
 void ssftbldel(SSFTBL *tbl);

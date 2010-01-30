@@ -1,6 +1,26 @@
 #include <ssutil.h>
 #include <compress.h>
 
+compressfunc getcompressfunc(int cmethod) {
+  switch (cmethod) {
+  case SSCMNONE: return sscodec_nonecompress;
+  case SSCMZLIB: return sscodec_zlibcompress;
+  default:
+    assert(false);
+    return NULL;
+  }
+}
+
+decompressfunc getdecompressfunc(int cmethod) {
+  switch (cmethod) {
+  case SSCMNONE: return sscodec_nonedecompress;
+  case SSCMZLIB: return sscodec_zlibdecompress;
+  default:
+    assert(false);
+    return NULL;
+  }
+}
+
 /*-----------------------------------------------------------------------------
  * none
  */
