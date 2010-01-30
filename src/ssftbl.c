@@ -10,12 +10,13 @@
 #include <sys/mman.h>
 
 /* header information */
-#define FTBLHEADERSIZ 256               /* size of the header */
-#define FTBLMAGICDATA "HuGeTaBlEKaMoNe" /* magic string for identification */
-#define FTBLBLKSIZOFF 32                /* block size */
-#define FTBLRNUMOFF   36                /* number of records */
-#define FTBLIDXNUM    40                /* number of index entries */
-#define FTBLIDXOFF    48                /* index info offset */
+#define FTBLHEADERSIZ   256               /* size of the header */
+#define FTBLMAGICDATA   "HuGeTaBlEKaMoNe" /* magic string for identification */
+#define FTBLBLKSIZOFF   32                /* block size */
+#define FTBLRNUMOFF     36                /* number of records */
+#define FTBLIDXNUM      40                /* number of index entries */
+#define FTBLIDXOFF      44                /* index info offset */
+#define FTBLCMETHODOFF  52                /* compression method */
 
 /* const or default parameters */
 #define FTBLFILEMODE   00644            /* permission of created files */
@@ -62,6 +63,10 @@ void ssftbldel(SSFTBL *tbl) {
 }
 
 int ssftbltune(SSFTBL *tbl, uint64_t blksiz, int cmethod) {
+  if (tbl->dfd >= 0) {
+    ssftblsetecode(tbl, SSEINVALID);
+    return -1;
+  }
   assert(tbl);
   if (blksiz > 0) tbl->blksiz = blksiz;
   if (cmethod > 0) tbl->cmethod = cmethod;
@@ -116,20 +121,16 @@ int ssftblclose(SSFTBL *tbl) {
   if (tbl->dfd >= 0) {
     if (tbl->omode == SSFTBLOWRITER && tbl->lastappended.kbuf) {
       int err = 0;
-      /* write current blkbuf */
+      assert(tbl->curblkrnum >= 1);
       int blksiz = 0;
-      uint64_t doff = 0;
-      if (tbl->curblksiz > 0) {
-        assert(tbl->curblkrnum > 0);
-        tbl->idx[tbl->idxnum-1].blksiz = tbl->curblksiz;
-        if (tbl->curblkrnum == 1) {
-          doff = (uint64_t)lseek(tbl->dfd, 0, SEEK_END); /* new block */
-        } else if (tbl->curblkrnum > 1) {
-          doff = tbl->idx[tbl->idxnum-1].doff; /* same with last index block */
-        }
-      }
+      uint64_t lastkeydoff = (uint64_t)lseek(tbl->dfd, 0, SEEK_END);
       if (ssftbldumpblk(tbl, tbl->dfd, tbl->blkbuf, tbl->curblksiz, &blksiz) != 0)
         err = -1;
+      uint32_t lastkeyblksiz = blksiz;
+      if (tbl->curblkrnum > 1) {
+        tbl->idx[tbl->idxnum-1].doff = lastkeydoff;
+        tbl->idx[tbl->idxnum-1].blksiz = blksiz;
+      }
       /* record last entry into tbl->idx */
       SSFTBLIDXENT *e = &tbl->lastappended;
       tbl->idxnum++;
@@ -137,8 +138,8 @@ int ssftblclose(SSFTBL *tbl) {
       SSMALLOC(tbl->idx[tbl->idxnum-1].kbuf, e->ksiz);
       memcpy(tbl->idx[tbl->idxnum-1].kbuf, e->kbuf, e->ksiz);
       tbl->idx[tbl->idxnum-1].ksiz = e->ksiz;
-      tbl->idx[tbl->idxnum-1].doff = doff;
-      tbl->idx[tbl->idxnum-1].blksiz = blksiz;
+      tbl->idx[tbl->idxnum-1].doff = lastkeydoff;
+      tbl->idx[tbl->idxnum-1].blksiz = lastkeyblksiz;
       /* get index information index */
       off_t idxoff = lseek(tbl->dfd, 0, SEEK_END);
       if (idxoff == -1) {
@@ -354,6 +355,7 @@ static int ssftbldumpheader(SSFTBL *tbl) {
   memcpy(buf + FTBLRNUMOFF, &tbl->rnum, sizeof(tbl->rnum));
   memcpy(buf + FTBLIDXNUM, &tbl->idxnum, sizeof(tbl->idxnum));
   memcpy(buf + FTBLIDXOFF, &tbl->idxoff, sizeof(tbl->idxoff));
+  memcpy(buf + FTBLCMETHODOFF, &tbl->cmethod, sizeof(tbl->cmethod));
   if (lseek(tbl->dfd, 0, SEEK_SET) != 0) {
     ssftblsetecode(tbl, SSESEEK);
     return -1;
@@ -379,10 +381,11 @@ static int ssftblloadheader(SSFTBL *tbl) {
     ssftblsetecode(tbl, SSEMETA);
     return -1;
   }
-  memcpy(&tbl->blksiz, buf + FTBLBLKSIZOFF, sizeof(tbl->blksiz));
-  memcpy(&tbl->rnum,   buf + FTBLRNUMOFF, sizeof(tbl->rnum));
-  memcpy(&tbl->idxnum, buf + FTBLIDXNUM, sizeof(tbl->idxnum));
-  memcpy(&tbl->idxoff, buf + FTBLIDXOFF, sizeof(tbl->idxoff));
+  memcpy(&tbl->blksiz,  buf + FTBLBLKSIZOFF, sizeof(tbl->blksiz));
+  memcpy(&tbl->rnum,    buf + FTBLRNUMOFF, sizeof(tbl->rnum));
+  memcpy(&tbl->idxnum,  buf + FTBLIDXNUM, sizeof(tbl->idxnum));
+  memcpy(&tbl->idxoff,  buf + FTBLIDXOFF, sizeof(tbl->idxoff));
+  memcpy(&tbl->cmethod, buf + FTBLCMETHODOFF, sizeof(tbl->cmethod));
   assert(tbl);
   return 0;
 }

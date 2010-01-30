@@ -10,6 +10,7 @@
 #endif
 SSFTBL_CLINKAGEBEGIN
 
+#include <compress.h>
 #include <ssutil.h>
 
 enum SSFTBLOMODE { /* enumeration for open modes */
