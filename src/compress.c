@@ -23,12 +23,160 @@ char *sscodec_nonedecompress(const char *ptr, int size, int *sp) {
 }
 
 /*-----------------------------------------------------------------------------
+ * ZLIB
+ */
+#if HAVE_ZLIB
+#include <zlib.h>
+#define ZLIBBUFSIZ (16*1024)
+char *sscodec_zlibcompress(const char *ptr, int size, int *sp) {
+  assert(ptr && size >= 0 && sp);
+  z_stream zs;
+  zs.zalloc = Z_NULL;
+  zs.zfree = Z_NULL;
+  zs.opaque = Z_NULL;
+  if (deflateInit2(&zs, 5, Z_DEFLATED, -15, 7, Z_DEFAULT_STRATEGY) != Z_OK)
+    return NULL;
+  /*
+    if (deflateInit2(&zs, 6, Z_DEFLATED, 15 + 16, 9, Z_DEFAULT_STRATEGY) != Z_OK)
+    if (deflateInit2(&zs, 6, Z_DEFLATED, 15, 8, Z_DEFAULT_STRATEGY) != Z_OK)
+  */
+  int asiz = size + 16;
+  if (asiz < ZLIBBUFSIZ) asiz = ZLIBBUFSIZ;
+  char *buf;
+  if (!(buf = malloc(asiz))) {
+    deflateEnd(&zs);
+    return NULL;
+  }
+  unsigned char obuf[ZLIBBUFSIZ];
+  int bsiz = 0;
+  zs.next_in = (unsigned char *)ptr;
+  zs.avail_in = size;
+  zs.next_out = obuf;
+  zs.avail_out = ZLIBBUFSIZ;
+  int rv;
+  while((rv = deflate(&zs, Z_FINISH)) == Z_OK) {
+    int osiz = ZLIBBUFSIZ - zs.avail_out;
+    if (bsiz + osiz > asiz) {
+      asiz = asiz * 2 + osiz;
+      char *swap;
+      if (!(swap = realloc(buf, asiz))) {
+        free(buf);
+        deflateEnd(&zs);
+        return NULL;
+      }
+      buf = swap;
+    }
+    memcpy(buf + bsiz, obuf, osiz);
+    bsiz += osiz;
+    zs.next_out = obuf;
+    zs.avail_out = ZLIBBUFSIZ;
+  }
+  if (rv != Z_STREAM_END) {
+    free(buf);
+    deflateEnd(&zs);
+    return NULL;
+  }
+  int osiz = ZLIBBUFSIZ - zs.avail_out;
+  if (bsiz + osiz + 1 > asiz) {
+    asiz = asiz * 2 + osiz;
+    char *swap;
+    if (!(swap = realloc(buf, asiz))) {
+      free(buf);
+      deflateEnd(&zs);
+      return NULL;
+    }
+    buf = swap;
+  }
+  memcpy(buf + bsiz, obuf, osiz);
+  bsiz += osiz;
+  buf[bsiz] = '\0';
+  bsiz++;
+  *sp = bsiz;
+  deflateEnd(&zs);
+  return buf;
+}
+
+char *sscodec_zlibdecompress(const char *ptr, int size, int * sp) {
+  assert(ptr && size >= 0 && sp);
+  z_stream zs;
+  zs.zalloc = Z_NULL;
+  zs.zfree = Z_NULL;
+  zs.opaque = Z_NULL;
+  if(inflateInit2(&zs, -15) != Z_OK) return NULL;
+  /*
+    if(inflateInit2(&zs, 15 + 16) != Z_OK) return NULL;
+    if(inflateInit2(&zs, 15) != Z_OK) return NULL;
+  */
+  int asiz = size * 2 + 16;
+  if(asiz < ZLIBBUFSIZ) asiz = ZLIBBUFSIZ;
+  char *buf;
+  if(!(buf = malloc(asiz))){
+    inflateEnd(&zs);
+    return NULL;
+  }
+  unsigned char obuf[ZLIBBUFSIZ];
+  int bsiz = 0;
+  zs.next_in = (unsigned char *)ptr;
+  zs.avail_in = size;
+  zs.next_out = obuf;
+  zs.avail_out = ZLIBBUFSIZ;
+  int rv;
+  while((rv = inflate(&zs, Z_NO_FLUSH)) == Z_OK){
+    int osiz = ZLIBBUFSIZ - zs.avail_out;
+    if(bsiz + osiz >= asiz){
+      asiz = asiz * 2 + osiz;
+      char *swap;
+      if(!(swap = realloc(buf, asiz))){
+        free(buf);
+        inflateEnd(&zs);
+        return NULL;
+      }
+      buf = swap;
+    }
+    memcpy(buf + bsiz, obuf, osiz);
+    bsiz += osiz;
+    zs.next_out = obuf;
+    zs.avail_out = ZLIBBUFSIZ;
+  }
+  if(rv != Z_STREAM_END){
+    free(buf);
+    inflateEnd(&zs);
+    return NULL;
+  }
+  int osiz = ZLIBBUFSIZ - zs.avail_out;
+  if(bsiz + osiz >= asiz){
+    asiz = asiz * 2 + osiz;
+    char *swap;
+    if(!(swap = realloc(buf, asiz))){
+      free(buf);
+      inflateEnd(&zs);
+      return NULL;
+    }
+    buf = swap;
+  }
+  memcpy(buf + bsiz, obuf, osiz);
+  bsiz += osiz;
+  buf[bsiz] = '\0';
+  *sp = bsiz;
+  inflateEnd(&zs);
+  return buf;
+}
+#else
+char *sscodec_zlibcompress(const char *ptr, int size, int *sp) {
+  return sscodec_nonecompress(ptr, size, sp);
+}
+
+char *sscodec_zlibdecompress(const char *ptr, int size, int * sp) {
+  return sscodec_nonedecompress(ptr, size, sp);
+}
+#endif
+
+/*-----------------------------------------------------------------------------
  * LZO
  */
+#if HAVE_LZO
 #include <lzo/lzo1x.h>
-
 static int lzo_init = 0;
-
 char *sscodec_lzocompress(const char *ptr, int size, int *sp) {
   assert(ptr && size && sp);
   if (!lzo_init) {
@@ -77,3 +225,12 @@ char *sscodec_lzodecompress(const char *ptr, int size, int * sp) {
   if (sp) *sp = bsiz;
   return (char *)buf;
 }
+#else
+char *sscodec_lzocompress(const char *ptr, int size, int *sp) {
+  return sscodec_nonecompress(ptr, size, sp);
+}
+
+char *sscodec_lzodecompress(const char *ptr, int size, int * sp) {
+  return sscodec_nonedecompress(ptr, size, sp);
+}
+#endif
