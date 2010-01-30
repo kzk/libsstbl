@@ -61,9 +61,10 @@ void ssftbldel(SSFTBL *tbl) {
   SSFREE(tbl);
 }
 
-int ssftbltune(SSFTBL *tbl, uint64_t blksiz) {
+int ssftbltune(SSFTBL *tbl, uint64_t blksiz, int cmethod) {
   assert(tbl);
-  tbl->blksiz = blksiz;
+  if (blksiz > 0) tbl->blksiz = blksiz;
+  if (cmethod > 0) tbl->cmethod = cmethod;
   return 0;
 }
 

@@ -49,7 +49,7 @@ typedef struct {
 
 SSFTBL *ssftblnew(void);
 void ssftbldel(SSFTBL *tbl);
-int ssftbltune(SSFTBL *tbl, uint64_t blksiz);
+int ssftbltune(SSFTBL *tbl, uint64_t blksiz, int cmethod);
 int ssftblsetcache(SSFTBL *tbl, uint32_t blkcnum);
 
 int ssftblopen(SSFTBL *tbl, const char *path, enum SSFTBLOMODE omode);
