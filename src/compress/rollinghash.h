@@ -7,13 +7,13 @@ typedef struct {
 } ROLLINGHASH;
 
 /* Create a rolling hash object.
-   The return value is the new rolling hash object.
-   `wsiz' specifies the windows size of the rolling hash.
-*/
+ * The return value is the new rolling hash object.
+ * `wsiz' specifies the windows size of the rolling hash.
+ */
 ROLLINGHASH *rollinghashnew(size_t wsiz);
 
 /* Delete a rolling hash object.
-   `rhash' specifies the rolling hash object.
+ * `rhash' specifies the rolling hash object.
  */
 void rollinghashdel(ROLLINGHASH *rhash);
 
