@@ -40,6 +40,11 @@ BLKHASH *blkhashnew(const char *ptr, size_t ptrsiz) {
 }
 
 void blkhashdel(BLKHASH *bhash) {
+  if (bhash == NULL) return;
+  SSFREE(bhash->hashtbl);
+  SSFREE(bhash->nextblktbl);
+  SSFREE(bhash->lastblktbl);
+  SSFREE(bhash);
 }
 
 void blkhashaddhash(BLKHASH *bhash, int index, uint32_t hash) {
