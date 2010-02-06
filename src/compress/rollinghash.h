@@ -1,3 +1,6 @@
+#ifndef ROLLINGHASH_H_
+#define ROLLINGHASH_H_
+
 typedef struct {
   size_t wsiz;
   uint32_t *rtbl; /* table used for fast update */
@@ -7,8 +10,8 @@ typedef struct {
    The return value is the new rolling hash object.
    `wsiz' specifies the windows size of the rolling hash.
 */
-
 ROLLINGHASH *rollinghashnew(size_t wsiz);
+
 /* Delete a rolling hash object.
    `rhash' specifies the rolling hash object.
  */
@@ -33,3 +36,5 @@ uint32_t rollinghashupdate(ROLLINGHASH *rhash,
                            uint32_t oldhash,
                            const char old_first_byte,
                            const char new_last_byte);
+
+#endif /* Not def: ROLLINGHASH_H_ */
