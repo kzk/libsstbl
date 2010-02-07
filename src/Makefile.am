@@ -7,7 +7,8 @@ libsstbl_la_SOURCES = \
   ssutil.h ssutil.c \
   compress.h compress.c \
   compress/rollinghash.h compress/rollinghash.c \
-  compress/blkhash.h compress/blkhash.c
+  compress/blkhash.h compress/blkhash.c \
+  compress/vcdiff.c
 
 libsstbl_la_LIBADD = \
   -lpthread -lm -ltokyocabinet
