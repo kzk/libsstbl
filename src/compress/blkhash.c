@@ -3,13 +3,16 @@
 
 /* const or default parameters */
 #define BLKHASHBLKSIZ 16
+#define BLKHASHMAXPROBES 16
 
 /* private function prototypes */
 static uint32_t getnumblocks(BLKHASH *bhash);
 static uint32_t gethashtblindex(BLKHASH *bhash, uint32_t hash);
 static int calctblsize(size_t ptrsiz);
 static int addblk(BLKHASH *bhash, uint32_t hash);
-static int nextindextoadd(BLKHASH *bhash); 
+static int nextindextoadd(BLKHASH *bhash);
+static int scanblks(BLKHASH *bhash, int hashtblidx, const char *ptr);
+static int replaceifbettermatch(BLKHASHMATCH *m, int matchsize, int targetoff, int sourceoff);
 static void setecode(BLKHASH *bhash, int ecode);
 
 /*-----------------------------------------------------------------------------
@@ -50,6 +53,39 @@ void blkhashdel(BLKHASH *bhash) {
 void blkhashaddhash(BLKHASH *bhash, int index, uint32_t hash) {
   if (index != nextindextoadd(bhash)) return;
   addblk(bhash, hash);
+}
+
+int blkhashfindfirstmatch(BLKHASH *bhash, uint32_t hash, const char *targetptr) {
+  int hashtblidx = gethashtblindex(bhash, hash);
+  return scanblks(bhash, hashtblidx, targetptr);
+}
+
+int blkhashfindnextmatch(BLKHASH *bhash, int blknum, const char *targetptr) {
+  if (blknum < 0 || blknum >= getnumblocks(bhash)) {
+    setecode(bhash, SSEINVALID);
+    return -1;
+  }
+  return scanblks(bhash, bhash->nextblktbl[blknum], targetptr);
+}
+
+int blkhashfindbestmatch(BLKHASH *bhash, uint32_t hash, const char *targetptr,
+                         const char *targetptrbegin, size_t targetsiz,
+                         BLKHASHMATCH *match) {
+  int ret = -1;
+  match->size = 0;
+  match->targetoff = -1;
+  match->sourceoff = -1;
+  int blknum = blkhashfindfirstmatch(bhash, hash, targetptr);
+  for (; blknum >= 0; blknum = blkhashfindnextmatch(bhash, blknum, targetptr)) {
+    int matchsize = bhash->blksiz;
+    int sourcematchoff = blknum * bhash->blksiz;
+    int sourcematchend = sourcematchoff + bhash->blksiz;
+    int targetmatchoff = targetptr - targetptrbegin;
+    int targetmatchend = targetmatchoff + bhash->blksiz;
+    if (replaceifbettermatch(match, matchsize, targetmatchoff, sourcematchoff))
+      ret = blknum;
+  }
+  return ret;
 }
 
 /*-----------------------------------------------------------------------------
@@ -110,6 +146,30 @@ static int addblk(BLKHASH *bhash, uint32_t hash) {
 
 static int nextindextoadd(BLKHASH *bhash) {
   return (bhash->lastaddedblknum + 1) * bhash->blksiz;
+}
+
+static int scanblks(BLKHASH *bhash, int blknum, const char* targetptr) {
+  int n = 0;
+  while (blknum >= 0
+         && memcmp(targetptr,
+                   bhash->ptr + (bhash->blksiz * blknum),
+                   bhash->blksiz) != 0) {
+    if (++n > BLKHASHMAXPROBES)
+      return -1; /* avoid too much scanning */
+    blknum = bhash->nextblktbl[blknum];
+  }
+  return blknum;
+}
+
+static int replaceifbettermatch(BLKHASHMATCH *m, int matchsize,
+                                int targetoff, int sourceoff) {
+  if (m->size < matchsize) {
+    m->size = matchsize;
+    m->targetoff = targetoff;
+    m->sourceoff = sourceoff;
+    return 1;
+  }
+  return 0;
 }
 
 static void setecode(BLKHASH *bhash, int ecode) {
