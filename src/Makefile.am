@@ -15,7 +15,7 @@ libsstbl_la_LIBADD = \
 
 check_PROGRAMS = \
   ssftbl_test_none ssftbl_test_compress \
-  ssmtbl_test compress_test
+  ssmtbl_test compress_test rollinghash_test
 
 ssftbl_test_none_SOURCES = ssftbl_test.cpp
 ssftbl_test_none_CXXFLAGS = -I$(top_srcdir)/src -DSSFTBLCMETHOD=1
@@ -32,5 +32,10 @@ ssmtbl_test_LDADD = -lgtest_main -lsstbl
 compress_test_SOURCES = compress_test.cpp
 compress_test_CXXFLAGS = -I$(top_srcdir)/src
 compress_test_LDADD = -lgtest_main -lsstbl
+
+rollinghash_test_SOURCES = compress/rollinghash_test.cpp
+rollinghash_test_CXXFLAGS = -I$(top_srcdir)/src
+rollinghash_test_LDADD = -lgtest_main -lsstbl
+
 
 TESTS = $(check_PROGRAMS)
