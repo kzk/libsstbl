@@ -1,6 +1,18 @@
 #ifndef BLOCKHASH_H_
 #define BLOCKHASH_H_
 
+#if defined(__cplusplus)
+#define BLKHASH_CLINKAGEBEGIN extern "C" {
+#define BLKHASH_CLINKAGEEND }
+#else
+#define BLKHASH_CLINKAGEBEGIN
+#define BLKHASH_CLINKAGEEND
+#endif
+BLKHASH_CLINKAGEBEGIN
+
+#include <stdio.h>
+#include <stdint.h>
+
 typedef struct {
   size_t size;
   int targetoff;
@@ -36,7 +48,7 @@ void blkhashdel(BLKHASH *bhash);
  * `index' specfies the offset of the data.
  * `hash' specifies the hash of the data starting from `index'.
  */
-void blkhashaddhash(BLKHASH *bhash, int index, uint32_t hash);
+int blkhashaddhash(BLKHASH *bhash, int index, uint32_t hash);
 
 int blkhashfindbestmatch(BLKHASH *bhash, uint32_t hash, const char *targetptr,
                          const char *targetptrbegin, size_t targetsiz,
@@ -44,4 +56,5 @@ int blkhashfindbestmatch(BLKHASH *bhash, uint32_t hash, const char *targetptr,
 int blkhashfindfirstmatch(BLKHASH *bhash, uint32_t hash, const char *ptr);
 int blkhashfindnextmatch(BLKHASH *bhash, int blknum, const char *ptr);
 
-#endif /* Not def: BLOCKHASH_H_ */
+BLKHASH_CLINKAGEEND
+#endif

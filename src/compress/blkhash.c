@@ -43,21 +43,22 @@ BLKHASH *blkhashnew(const char *ptr, size_t ptrsiz) {
 }
 
 void blkhashdel(BLKHASH *bhash) {
-  if (bhash == NULL) return;
+  assert(bhash);
   SSFREE(bhash->hashtbl);
   SSFREE(bhash->nextblktbl);
   SSFREE(bhash->lastblktbl);
   SSFREE(bhash);
 }
 
-void blkhashaddhash(BLKHASH *bhash, int index, uint32_t hash) {
-  if (index != nextindextoadd(bhash)) return;
-  addblk(bhash, hash);
+int blkhashaddhash(BLKHASH *bhash, int index, uint32_t hash) {
+  if (index != nextindextoadd(bhash)) return 0;
+  return addblk(bhash, hash);
 }
 
 int blkhashfindfirstmatch(BLKHASH *bhash, uint32_t hash, const char *targetptr) {
   int hashtblidx = gethashtblindex(bhash, hash);
-  return scanblks(bhash, hashtblidx, targetptr);
+  int blknum = bhash->hashtbl[hashtblidx];
+  return scanblks(bhash, blknum, targetptr);
 }
 
 int blkhashfindnextmatch(BLKHASH *bhash, int blknum, const char *targetptr) {
@@ -156,6 +157,7 @@ static int scanblks(BLKHASH *bhash, int blknum, const char* targetptr) {
                    bhash->blksiz) != 0) {
     if (++n > BLKHASHMAXPROBES)
       return -1; /* avoid too much scanning */
+    assert(0 <= blknum && (unsigned int)blknum < getnumblocks(bhash));
     blknum = bhash->nextblktbl[blknum];
   }
   return blknum;
@@ -163,7 +165,7 @@ static int scanblks(BLKHASH *bhash, int blknum, const char* targetptr) {
 
 static int replaceifbettermatch(BLKHASHMATCH *m, int matchsize,
                                 int targetoff, int sourceoff) {
-  if (m->size < matchsize) {
+  if (m->size < (unsigned int)matchsize) {
     m->size = matchsize;
     m->targetoff = targetoff;
     m->sourceoff = sourceoff;
