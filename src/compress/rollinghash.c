@@ -1,8 +1,8 @@
 #include <ssutil.h>
 #include <compress/rollinghash.h>
 
-#define RHASHMULT 257
-#define RHASHBASE (1 << 23)
+#define RHASHMULT 257U
+#define RHASHBASE (1UL << 23)
 
 /* private function prototypes */
 uint32_t *initremovetbl(size_t wsiz);
@@ -45,9 +45,12 @@ uint32_t rollinghashupdate(ROLLINGHASH *rhash,
                            uint32_t oldhash,
                            const char old_first_byte,
                            const char new_last_byte) {
-  oldhash += rhash->rtbl[(unsigned int)old_first_byte];
-  oldhash += MODBASE((oldhash * RHASHMULT) + ((unsigned char)new_last_byte));
-  return oldhash;
+  uint32_t hash;
+  /* remove first byte */
+  hash = MODBASE(oldhash + rhash->rtbl[(unsigned int)old_first_byte]);
+  /* add last byte */
+  hash = MODBASE((hash * RHASHMULT) + ((unsigned char)new_last_byte));
+  return hash;
 }
 
 /*-----------------------------------------------------------------------------
@@ -56,18 +59,16 @@ uint32_t rollinghashupdate(ROLLINGHASH *rhash,
 
 /* rtbl has 256 entry table, used to fast update for rolling.
  * it stores the following value:
- *   rtbl[byte] == (- byte * pow(RHASHMULT, wsiz - 1)) % RHASHBASE
+ *   rtbl[byte] == - (byte * pow(RHASHMULT, wsiz - 1)) % RHASHBASE
  */
 uint32_t *initremovetbl(size_t wsiz) {
   unsigned int i;
   uint32_t *rtbl;
   SSMALLOC(rtbl, sizeof(uint32_t) * 256);
-
   /* multiplier = pow(RHASHMULT, wsiz - 1) */
   uint32_t multiplier = 1;
   for (i = 0; i < wsiz - 1; i++)
     multiplier = MODBASE(multiplier * RHASHMULT);
-
   /* byte_multiplier = (byte * multiplier) % RHASHBASE */
   uint32_t byte_multiplier = 0;
   for (i = 0; i < 256; i++) {
