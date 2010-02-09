@@ -1,6 +1,18 @@
 #ifndef ROLLINGHASH_H_
 #define ROLLINGHASH_H_
 
+#if defined(__cplusplus)
+#define ROLLINGHASH_CLINKAGEBEGIN extern "C" {
+#define ROLLINGHASH_CLINKAGEEND }
+#else
+#define ROLLINGHASH_CLINKAGEBEGIN
+#define ROLLINGHASH_CLINKAGEEND
+#endif
+ROLLINGHASH_CLINKAGEBEGIN
+
+#include <stdio.h>
+#include <stdint.h>
+
 typedef struct {
   size_t wsiz;
   uint32_t *rtbl; /* table used for fast update */
@@ -37,4 +49,6 @@ uint32_t rollinghashupdate(ROLLINGHASH *rhash,
                            const char old_first_byte,
                            const char new_last_byte);
 
+
+ROLLINGHASH_CLINKAGEEND
 #endif /* Not def: ROLLINGHASH_H_ */
