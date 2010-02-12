@@ -6,26 +6,28 @@
 #define BLKHASHMAXPROBES 16
 
 /* private function prototypes */
-static uint32_t getnumblocks(BLKHASH *bhash);
+static int getnumblocks(BLKHASH *bhash);
 static uint32_t gethashtblindex(BLKHASH *bhash, uint32_t hash);
 static int calctblsize(size_t ptrsiz);
 static int addblk(BLKHASH *bhash, uint32_t hash);
 static int nextindextoadd(BLKHASH *bhash);
 static int scanblks(BLKHASH *bhash, int hashtblidx, const char *ptr);
+static int matchleft(const char *ptr1, const char *ptr2, int maxsiz);
+static int matchright(const char *ptr1, const char *ptr2, int maxsiz);
 static int replaceifbettermatch(BLKHASHMATCH *m, int matchsize, int targetoff, int sourceoff);
 static void setecode(BLKHASH *bhash, int ecode);
 
 /*-----------------------------------------------------------------------------
  * APIs
  */
-BLKHASH *blkhashnew(const char *ptr, size_t ptrsiz) {
+BLKHASH *blkhashnew(const char *sourceptr, size_t sourceptrsiz) {
   uint32_t i;
-  uint32_t tblsiz = calctblsize(ptrsiz);
+  uint32_t tblsiz = calctblsize(sourceptrsiz);
   if (tblsiz <= 0) return NULL;
   BLKHASH *bhash;
   SSMALLOC(bhash, sizeof(BLKHASH));
-  bhash->ptr = ptr;
-  bhash->ptrsiz = ptrsiz;
+  bhash->ptr = sourceptr;
+  bhash->ptrsiz = sourceptrsiz;
   bhash->blksiz = BLKHASHBLKSIZ;
   bhash->lastaddedblknum = -1;
   bhash->ecode = SSESUCCESS;
@@ -35,7 +37,7 @@ BLKHASH *blkhashnew(const char *ptr, size_t ptrsiz) {
   SSMALLOC(bhash->lastblktbl, getnumblocks(bhash) * sizeof(int));
   for (i = 0; i < tblsiz; i++)
     bhash->hashtbl[i] = -1;
-  for (i = 0; i < getnumblocks(bhash); i++) {
+  for (i = 0; i < (uint32_t)getnumblocks(bhash); i++) {
     bhash->nextblktbl[i] = -1;
     bhash->lastblktbl[i] = -1;
   }
@@ -78,12 +80,28 @@ int blkhashfindbestmatch(BLKHASH *bhash, uint32_t hash, const char *targetptr,
   match->sourceoff = -1;
   int blknum = blkhashfindfirstmatch(bhash, hash, targetptr);
   for (; blknum >= 0; blknum = blkhashfindnextmatch(bhash, blknum, targetptr)) {
-    int matchsize = bhash->blksiz;
+    assert(0 <= blknum && blknum < getnumblocks(bhash));
+    int matchsiz = bhash->blksiz;
     int sourcematchoff = blknum * bhash->blksiz;
     int sourcematchend = sourcematchoff + bhash->blksiz;
     int targetmatchoff = targetptr - targetptrbegin;
     int targetmatchend = targetmatchoff + bhash->blksiz;
-    if (replaceifbettermatch(match, matchsize, targetmatchoff, sourcematchoff))
+    /* extend the match towards the beginning of data */
+    int sourcemaxsizleft = sourcematchoff;
+    int targetmaxsizleft = targetmatchoff;
+    int maxsizleft = SSMIN(sourcemaxsizleft, targetmaxsizleft);
+    int matchsizleft = matchleft(bhash->ptr + sourcematchoff, targetptr, maxsizleft);
+    /* extend the match towards the end of data */
+    int sourcemaxsizright = bhash->ptrsiz - sourcematchend;
+    int targetmaxsizright = targetsiz - targetmatchend;
+    int maxsizright = SSMIN(sourcemaxsizright, targetmaxsizright);
+    int matchsizright = matchright(bhash->ptr + sourcematchend,
+                                   targetptrbegin + targetmatchend,
+                                   maxsizright);
+    /* update matchsiz */
+    matchsiz += matchsizleft + matchsizright;
+    /* replace the current match if longer one is found */
+    if (replaceifbettermatch(match, matchsiz, targetmatchoff, sourcematchoff))
       ret = blknum;
   }
   return ret;
@@ -92,7 +110,7 @@ int blkhashfindbestmatch(BLKHASH *bhash, uint32_t hash, const char *targetptr,
 /*-----------------------------------------------------------------------------
  * private functions
  */
-static uint32_t getnumblocks(BLKHASH *bhash) {
+static int getnumblocks(BLKHASH *bhash) {
   assert(bhash);
   return (bhash->ptrsiz / bhash->blksiz);
 }
@@ -157,10 +175,32 @@ static int scanblks(BLKHASH *bhash, int blknum, const char* targetptr) {
                    bhash->blksiz) != 0) {
     if (++n > BLKHASHMAXPROBES)
       return -1; /* avoid too much scanning */
-    assert(0 <= blknum && (unsigned int)blknum < getnumblocks(bhash));
+    assert(0 <= blknum && blknum < getnumblocks(bhash));
     blknum = bhash->nextblktbl[blknum];
   }
   return blknum;
+}
+
+static int matchleft(const char *ptr1, const char *ptr2, int maxsiz) {
+  int matchsiz = 0;
+  while (matchsiz < maxsiz) {
+    --ptr1;
+    --ptr2;
+    if (*ptr1 != *ptr2) break;
+    matchsiz++;
+  }
+  return matchsiz;
+}
+
+static int matchright(const char *ptr1, const char *ptr2, int maxsiz) {
+  int matchsiz = 0;
+  while (matchsiz < maxsiz) {
+    if (*ptr1 != *ptr2) break;
+    ++ptr1;
+    ++ptr2;
+    ++matchsiz;
+  }
+  return matchsiz;
 }
 
 static int replaceifbettermatch(BLKHASHMATCH *m, int matchsize,
