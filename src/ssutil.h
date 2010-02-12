@@ -75,5 +75,9 @@ enum {                                   /* enumeration for error codes */
 int sswrite(int fd, const void *buf, size_t size);
 int ssread(int fd, void *buf, size_t size);
 
+/* MISC */
+#define SSMIN(a, b) (((a) < (b)) ? a : b);
+#define SSMAX(a, b) (((a) < (b)) ? b : a);
+
 __SSUTIL_CLINKAGEEND
 #endif
