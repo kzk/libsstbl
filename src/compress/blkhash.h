@@ -47,10 +47,20 @@ void blkhashdel(BLKHASH *bhash);
    `bhash' specifies the block hash object.
    `index' specfies the offset of the data.
    `hash' specifies the hash of the data starting from `index'.
-   The return value is zero if success, otherwise -1.
+   The return value is 0 if success, otherwise -1.
  */
 int blkhashaddhash(BLKHASH *bhash, int index, uint32_t hash);
 
+/* Find the best matching region between source data and the target data.
+   `bhash' specifies the block hash object.
+   `hash' specifies the hash value of the block starting from `targetptr'.
+   `targetptr' specifies the pointer within the target data.
+   `targetptrbegin' specifies the pointer to the beginning of the target data.
+   `targetsize' specifies the size of the target data.
+   `match' specifies the pointer to the block hash match object. The content
+   will be modified.
+   The return value is block number if success, otherwise -1.
+ */
 int blkhashfindbestmatch(BLKHASH *bhash, uint32_t hash, const char *targetptr,
                          const char *targetptrbegin, size_t targetsiz,
                          BLKHASHMATCH *match);

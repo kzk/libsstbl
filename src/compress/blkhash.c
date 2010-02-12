@@ -110,16 +110,31 @@ int blkhashfindbestmatch(BLKHASH *bhash, uint32_t hash, const char *targetptr,
 /*-----------------------------------------------------------------------------
  * private functions
  */
+
+/* Get the number of blocks in the source data.
+   `bhash' specifies the block hash object.
+   The return value is the number of blocks in the source data.
+ */
 static int getnumblocks(BLKHASH *bhash) {
   assert(bhash);
   return (bhash->ptrsiz / bhash->blksiz);
 }
 
+/* Get the index of the hashtbl.
+   `bhash' specifies the block hash object.
+   The return value is the index of bhash->hashtbl.
+ */
 static uint32_t gethashtblindex(BLKHASH *bhash, uint32_t hash) {
   assert(bhash);
   return hash & bhash->hashtblmask;
 }
 
+/* Calc the number of entries of hashtbl.
+   `ptrsiz' specifies the size of the source data.
+   The return value is the number of entries of bhash->hashtbl.
+   Increasing this value is a tradeoff between the performance and the memory
+   consumption.
+ */
 static int calctblsize(size_t ptrsiz) {
   int minsiz = (ptrsiz / sizeof(int)) + 1;
   int tblsiz = 1;
@@ -132,6 +147,11 @@ static int calctblsize(size_t ptrsiz) {
   return tblsiz;
 }
 
+/* Add the block to the block hash object.
+   `bhash' specifies the block hash object.
+   `hash' specifies the hash value of the adding block.
+   The return value is 0 if success, otherwise -1.
+ */
 static int addblk(BLKHASH *bhash, uint32_t hash) {
   int blknum = bhash->lastaddedblknum + 1;
   int totalblknum = (bhash->ptrsiz / bhash->blksiz) + 1;
@@ -163,10 +183,20 @@ static int addblk(BLKHASH *bhash, uint32_t hash) {
   return 0;
 }
 
+/* Get the index of the next block to add in the source data.
+   `bhash' specifies the block hash object.
+   The return value is the index in source data.
+ */
 static int nextindextoadd(BLKHASH *bhash) {
   return (bhash->lastaddedblknum + 1) * bhash->blksiz;
 }
 
+/* Scan the blocks to find the matching block.
+   `bhash' specifies the block hash object.
+   `blknum' specifies the block number.
+   `targetptr' specifies the pointer to the data to be matched.
+   The return value is the matched block number.
+ */
 static int scanblks(BLKHASH *bhash, int blknum, const char* targetptr) {
   int n = 0;
   while (blknum >= 0
@@ -181,6 +211,12 @@ static int scanblks(BLKHASH *bhash, int blknum, const char* targetptr) {
   return blknum;
 }
 
+/* Count the matching bytes to the left between two pointers.
+   `ptr1' specifies the data pointer.
+   `ptr2' specifies the another data pointer.
+   `maxsiz' specifies the max size of the matching region.
+   The return value is the number of matching bytes.
+ */
 static int matchleft(const char *ptr1, const char *ptr2, int maxsiz) {
   int matchsiz = 0;
   while (matchsiz < maxsiz) {
@@ -192,6 +228,12 @@ static int matchleft(const char *ptr1, const char *ptr2, int maxsiz) {
   return matchsiz;
 }
 
+/* Count the matching bytes to the right between two pointers.
+   `ptr1' specifies the data pointer.
+   `ptr2' specifies the another data pointer.
+   `maxsiz' specifies the max size of the matching region.
+   The return value is the number of matching bytes.
+ */
 static int matchright(const char *ptr1, const char *ptr2, int maxsiz) {
   int matchsiz = 0;
   while (matchsiz < maxsiz) {
@@ -203,8 +245,16 @@ static int matchright(const char *ptr1, const char *ptr2, int maxsiz) {
   return matchsiz;
 }
 
+/* Replace the BLKHASHMATCH if longer one is found.
+   `m' specifies the pointer to the match result structure.
+   `matchsize' specifies the newly found matching size.
+   `targetoff' specifies the target offset of the newly found matching region.
+   `sourceoff' specifies the source offset of the newly found matching region.
+   The return value is 1 if replaced, otherwise 0.
+ */
 static int replaceifbettermatch(BLKHASHMATCH *m, int matchsize,
                                 int targetoff, int sourceoff) {
+  assert(m != NULL);
   if (m->size < (unsigned int)matchsize) {
     m->size = matchsize;
     m->targetoff = targetoff;
