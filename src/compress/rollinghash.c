@@ -57,7 +57,7 @@ uint32_t rollinghashupdate(ROLLINGHASH *rhash,
  * private functions
  */
 
-/* rtbl has 256 entry table, used to fast update for rolling.
+/* rtbl has 256 entry table, which is used to fast rolling update.
  * it stores the following value:
  *   rtbl[byte] == - (byte * pow(RHASHMULT, wsiz - 1)) % RHASHBASE
  */
