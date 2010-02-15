@@ -75,12 +75,16 @@ int blkhashfindbestmatch(BLKHASH *bhash, uint32_t hash, const char *targetptr,
                          const char *targetptrbegin, size_t targetsiz,
                          BLKHASHMATCH *match) {
   int ret = -1;
+  int matchingcnt = 0;
+  int maxmatchingblknum = (bhash->blksiz >= 32) ? 32 : (32 * (32 / bhash->blksiz));
   match->size = 0;
   match->targetoff = -1;
   match->sourceoff = -1;
   int blknum = blkhashfindfirstmatch(bhash, hash, targetptr);
   for (; blknum >= 0; blknum = blkhashfindnextmatch(bhash, blknum, targetptr)) {
     assert(0 <= blknum && blknum < getnumblocks(bhash));
+    matchingcnt++;
+    if (matchingcnt > maxmatchingblknum) break;
     int matchsiz = bhash->blksiz;
     int sourcematchoff = blknum * bhash->blksiz;
     int sourcematchend = sourcematchoff + bhash->blksiz;
